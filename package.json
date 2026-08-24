@@ -7,6 +7,7 @@
     "build": "tsc -p tsconfig.json",
     "start": "node dist/main",
     "start:dev": "node -r ts-node/register src/main.ts",
+    "start:watch": "nodemon",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
@@ -33,6 +34,7 @@
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",
     "@types/node": "^22.0.0",
+    "nodemon": "^3.1.14",
     "prisma": "^6.2.1",
     "ts-node": "^10.9.2",
     "typescript": "^5.7.0"

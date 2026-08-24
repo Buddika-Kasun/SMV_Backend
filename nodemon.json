@@ -1,0 +1,24 @@
+{
+  "watch": [
+    "src"
+  ],
+  "ext": "ts,json",
+  "ignore": [
+    "src/**/*.spec.ts",
+    "node_modules",
+    "dist",
+    "*.log"
+  ],
+  "exec": "ts-node -r dotenv/config src/main.ts",
+  "env": {
+    "NODE_ENV": "development",
+    "NODE_OPTIONS": "--max-old-space-size=4096"
+  },
+  "delay": 2000,
+  "verbose": true,
+  "events": {
+    "start": "echo '🚀 Starting server...'",
+    "crash": "echo '❌ Server crashed!'",
+    "restart": "echo '🔄 Server restarting...'"
+  }
+}
