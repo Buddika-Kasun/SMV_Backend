@@ -10,7 +10,7 @@ export class ApproveLoanDto {
 export class RejectLoanDto {
   @IsString()
   @IsNotEmpty()
-  reason: string;
+  reason!: string;
 }
 
 export class DisburseLoanDto {
@@ -21,7 +21,7 @@ export class DisburseLoanDto {
 
 export class UpdateKYCDto {
   @IsObject()
-  kycData: Partial<KYCData>;
+  kycData!: Partial<KYCData>;
 
   @IsOptional()
   @IsBoolean()

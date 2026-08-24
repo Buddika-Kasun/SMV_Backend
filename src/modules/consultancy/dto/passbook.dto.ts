@@ -7,11 +7,11 @@ import { IsNotEmpty, IsOptional, IsString } from 'class-validator';
 export class PresignPassbookDto {
   @IsString()
   @IsNotEmpty()
-  fileName: string;
+  fileName!: string;
 
   @IsString()
   @IsNotEmpty()
-  contentType: string;
+  contentType!: string;
 }
 
 /**
@@ -21,7 +21,7 @@ export class PresignPassbookDto {
 export class ConfirmPassbookDto {
   @IsString()
   @IsNotEmpty()
-  key: string;
+  key!: string;
 
   @IsOptional()
   @IsString()

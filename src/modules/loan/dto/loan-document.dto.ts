@@ -13,30 +13,30 @@ const KYC_DOCUMENT_TYPES: KYCDocumentType[] = [
 export class PresignDocumentDto {
   @IsString()
   @IsNotEmpty()
-  fileName: string;
+  fileName!: string;
 
   @IsString()
   @IsNotEmpty()
-  contentType: string;
+  contentType!: string;
 
   @IsIn(KYC_DOCUMENT_TYPES)
-  documentType: KYCDocumentType;
+  documentType!: KYCDocumentType;
 }
 
 /** Step 2 - confirm the object exists and attach it to the loan KYC. */
 export class AttachDocumentDto {
   @IsString()
   @IsNotEmpty()
-  documentId: string;
+  documentId!: string;
 
   @IsString()
   @IsNotEmpty()
-  key: string;
+  key!: string;
 
   @IsIn(KYC_DOCUMENT_TYPES)
-  documentType: KYCDocumentType;
+  documentType!: KYCDocumentType;
 
   @IsString()
   @IsNotEmpty()
-  fileName: string;
+  fileName!: string;
 }

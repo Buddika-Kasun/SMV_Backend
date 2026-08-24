@@ -1,31 +1,42 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { PrismaService } from '../../config/prisma.service';
-import { StorageService } from '../../config/storage.service';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from "@nestjs/common";
+import { PrismaService } from "../../config/prisma.service";
+import { StorageService } from "../../config/storage.service";
 import {
   KYCData,
   KYCDocument,
   KYCDocumentType,
   Loan,
   PaymentRecord,
-} from '../../shared/types';
+} from "../../shared/types";
 import {
   allocatePayment,
   calculateEarlySettlementQuote,
   computeLoan,
   generateSchedule,
   roundTo,
-} from '../../common/utils/financial';
-import { loanId, paymentId, randomSuffix } from '../../common/utils/id';
-import { nowISO, todayISO } from '../../common/utils/dates';
-import { SmsService } from '../sms/sms.service';
-import { CreateLoanDto } from './dto/create-loan.dto';
-import { RecordPaymentDto, ExecuteSettlementDto } from './dto/payment-settlement.dto';
-import { UpdateKYCDto } from './dto/loan-transition.dto';
+} from "../../common/utils/financial";
+import { loanId, paymentId, randomSuffix } from "../../common/utils/id";
+import { nowISO, todayISO } from "../../common/utils/dates";
+import { SmsService } from "../sms/sms.service";
+import { CreateLoanDto } from "./dto/create-loan.dto";
+import {
+  RecordPaymentDto,
+  ExecuteSettlementDto,
+} from "./dto/payment-settlement.dto";
+import { UpdateKYCDto } from "./dto/loan-transition.dto";
 
-const PRE_DISBURSE = ['Pending Approval', 'KYC Pending', 'Approved - Pending Disbursement'];
-const CLOSED = ['Settled', 'Early Settled', 'Rejected'];
+const PRE_DISBURSE = [
+  "Pending Approval",
+  "KYC Pending",
+  "Approved - Pending Disbursement",
+];
+const CLOSED = ["Settled", "Early Settled", "Rejected"];
 
-type LoanRow = Awaited<ReturnType<PrismaService['loan']['findUnique']>>;
+type LoanRow = Awaited<ReturnType<PrismaService["loan"]["findUnique"]>>;
 
 @Injectable()
 export class LoansService {
@@ -46,14 +57,14 @@ export class LoansService {
         ...(search
           ? {
               OR: [
-                { customerName: { contains: search, mode: 'insensitive' } },
-                { accountNumber: { contains: search, mode: 'insensitive' } },
+                { customerName: { contains: search, mode: "insensitive" } },
+                { accountNumber: { contains: search, mode: "insensitive" } },
                 { customerPhone: { contains: search } },
               ],
             }
           : {}),
       },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { createdAt: "desc" },
     });
 
     return Promise.all(
@@ -78,9 +89,9 @@ export class LoansService {
 
     const kyc: KYCData = {
       nationalIdNumber: input.nationalIdNumber,
-      idType: 'NIC',
-      dateOfBirth: '',
-      gender: '',
+      idType: "NIC",
+      dateOfBirth: "",
+      gender: "",
       occupation: input.occupation,
       employerName: input.employerName,
       monthlyIncome: roundTo(input.monthlyIncome),
@@ -110,7 +121,7 @@ export class LoansService {
       accountNumber: id,
       customerName: input.customerName,
       customerPhone: input.customerPhone,
-      customerEmail: input.customerEmail ?? '',
+      customerEmail: input.customerEmail ?? "",
       loanType: input.loanType,
       requestedAmount: roundTo(input.requestedAmount),
       disbursedAmount: 0,
@@ -120,7 +131,7 @@ export class LoansService {
       interestMethod: input.interestMethod,
       processingFee: 0,
       earlySettlementPenaltyPercent: 2,
-      status: 'Pending Approval',
+      status: "Pending Approval",
       requestedDate: today,
       kyc,
       installments: schedule.installments,
@@ -141,7 +152,7 @@ export class LoansService {
 
   private async requireLoan(id: string): Promise<Loan> {
     const row = await this.prisma.loan.findUnique({ where: { id } });
-    if (!row) throw new NotFoundException('Loan not found');
+    if (!row) throw new NotFoundException("Loan not found");
     return this.fromRow(row);
   }
 
@@ -155,7 +166,7 @@ export class LoansService {
       requestedAmount: this.prisma.toNumber(row.requestedAmount),
       disbursedAmount: this.prisma.toNumber(row.disbursedAmount),
       interestRatePerAnnum: this.prisma.toNumber(row.interestRate),
-      status: data.status as Loan['status'],
+      status: data.status as Loan["status"],
     };
   }
 
@@ -182,16 +193,19 @@ export class LoansService {
       data: { ...this.toColumns(loan), status: loan.status } as any,
     });
   }
-// ---------------------------------------------------------------------------
+
+  // ---------------------------------------------------------------------------
   // Lifecycle transitions
   // ---------------------------------------------------------------------------
 
   async approve(id: string, notes?: string): Promise<Loan> {
     const loan = await this.requireLoan(id);
-    if (loan.status !== 'Pending Approval') {
-      throw new BadRequestException('Only Pending Approval loans can be approved');
+    if (loan.status !== "Pending Approval") {
+      throw new BadRequestException(
+        "Only Pending Approval loans can be approved",
+      );
     }
-    loan.status = 'KYC Pending';
+    loan.status = "KYC Pending";
     loan.approvedDate = loan.approvedDate ?? todayISO();
     await this.persist(loan);
     return computeLoan(loan);
@@ -200,18 +214,23 @@ export class LoansService {
   async reject(id: string, reason: string): Promise<Loan> {
     const loan = await this.requireLoan(id);
     if (!PRE_DISBURSE.includes(loan.status)) {
-      throw new BadRequestException('Loan cannot be rejected at this stage');
+      throw new BadRequestException("Loan cannot be rejected at this stage");
     }
-    loan.status = 'Rejected';
+    loan.status = "Rejected";
     loan.rejectedAt = nowISO();
     loan.rejectReason = reason;
     await this.persist(loan);
     return loan;
   }
 
-  async updateKYC(id: string, dto: UpdateKYCDto, actor?: { username?: string; fullName?: string }): Promise<Loan> {
+  async updateKYC(
+    id: string,
+    dto: UpdateKYCDto,
+    actor?: { username?: string; fullName?: string },
+  ): Promise<Loan> {
     const loan = await this.requireLoan(id);
-    if (loan.status === 'Rejected') throw new BadRequestException('Rejected loans cannot be edited');
+    if (loan.status === "Rejected")
+      throw new BadRequestException("Rejected loans cannot be edited");
 
     const merged: KYCData = {
       ...loan.kyc,
@@ -221,12 +240,13 @@ export class LoansService {
     if (dto.verified !== undefined) merged.isVerified = dto.verified;
     if (merged.isVerified) {
       merged.verifiedAt = merged.verifiedAt ?? todayISO();
-      merged.verifiedBy = merged.verifiedBy ?? actor?.fullName ?? actor?.username ?? 'system';
+      merged.verifiedBy =
+        merged.verifiedBy ?? actor?.fullName ?? actor?.username ?? "system";
     }
     loan.kyc = merged;
 
-    if (loan.status === 'KYC Pending' && merged.isVerified) {
-      loan.status = 'Approved - Pending Disbursement';
+    if (loan.status === "KYC Pending" && merged.isVerified) {
+      loan.status = "Approved - Pending Disbursement";
     }
 
     await this.persist(loan);
@@ -235,16 +255,19 @@ export class LoansService {
 
   async disburse(id: string): Promise<Loan> {
     const loan = await this.requireLoan(id);
-    if (loan.status !== 'Approved - Pending Disbursement') {
-      throw new BadRequestException('Loan must be Approved - Pending Disbursement to disburse');
+    if (loan.status !== "Approved - Pending Disbursement") {
+      throw new BadRequestException(
+        "Loan must be Approved - Pending Disbursement to disburse",
+      );
     }
     loan.disbursedAmount = loan.requestedAmount;
     loan.disbursedDate = todayISO();
-    loan.status = 'Active';
+    loan.status = "Active";
     await this.persist(loan);
     return computeLoan(loan);
   }
-// ---------------------------------------------------------------------------
+
+  // ---------------------------------------------------------------------------
   // KYC document uploads (storage bucket + presigned URLs)
   // ---------------------------------------------------------------------------
 
@@ -254,7 +277,11 @@ export class LoansService {
    */
   async presignDocument(
     id: string,
-    input: { fileName: string; contentType: string; documentType: KYCDocumentType },
+    input: {
+      fileName: string;
+      contentType: string;
+      documentType: KYCDocumentType;
+    },
   ): Promise<{ documentId: string; key: string; uploadUrl: string }> {
     await this.requireLoan(id);
     const documentId = `DOC-${randomSuffix(8)}`;
@@ -270,7 +297,12 @@ export class LoansService {
    */
   async attachDocument(
     id: string,
-    input: { documentId: string; key: string; documentType: KYCDocumentType; fileName: string },
+    input: {
+      documentId: string;
+      key: string;
+      documentType: KYCDocumentType;
+      fileName: string;
+    },
   ): Promise<Loan> {
     const loan = await this.requireLoan(id);
     if (!(await this.storage.exists(input.key))) {
@@ -279,7 +311,9 @@ export class LoansService {
       );
     }
     if (loan.kyc.documents.some((d) => d.id === input.documentId)) {
-      throw new BadRequestException('A document with this ID is already attached');
+      throw new BadRequestException(
+        "A document with this ID is already attached",
+      );
     }
 
     const document: KYCDocument = {
@@ -288,7 +322,7 @@ export class LoansService {
       fileName: input.fileName,
       fileKey: input.key,
       fileUrl: await this.storage.presignGet(input.key),
-      status: 'Pending Review',
+      status: "Pending Review",
       uploadedAt: nowISO(),
     };
     loan.kyc.documents = [...(loan.kyc.documents ?? []), document];
@@ -308,14 +342,17 @@ export class LoansService {
       }),
     );
   }
-// ---------------------------------------------------------------------------
+  
+  // ---------------------------------------------------------------------------
   // Payments
   // ---------------------------------------------------------------------------
 
   async receivePayment(id: string, dto: RecordPaymentDto): Promise<Loan> {
     const loan = await this.requireLoan(id);
     if (CLOSED.includes(loan.status) || PRE_DISBURSE.includes(loan.status)) {
-      throw new BadRequestException('Payments are only accepted on Active/Overdue loans');
+      throw new BadRequestException(
+        "Payments are only accepted on Active/Overdue loans",
+      );
     }
 
     const refDate = dto.paymentDate ? dto.paymentDate.slice(0, 10) : todayISO();
@@ -368,10 +405,12 @@ export class LoansService {
   async earlySettle(id: string, dto: ExecuteSettlementDto): Promise<Loan> {
     const loan = await this.requireLoan(id);
     if (CLOSED.includes(loan.status)) {
-      throw new BadRequestException('Loan is already closed');
+      throw new BadRequestException("Loan is already closed");
     }
     if (!loan.disbursedAmount) {
-      throw new BadRequestException('Loan must be disbursed before early settlement');
+      throw new BadRequestException(
+        "Loan must be disbursed before early settlement",
+      );
     }
 
     const refDate = dto.settlementDate ?? todayISO();
@@ -388,7 +427,7 @@ export class LoansService {
       inst.lateFeePaid = inst.lateFee ?? 0;
       inst.paidAmount = inst.totalInstallment;
       inst.remainingAmount = 0;
-      inst.status = 'Paid';
+      inst.status = "Paid";
       inst.paidDate = inst.paidDate ?? refDate;
     }
 
@@ -406,7 +445,7 @@ export class LoansService {
       paymentMethod: dto.paymentMethod,
       referenceNumber: dto.referenceNumber,
       receivedBy: dto.receivedBy,
-      notes: dto.notes ?? 'Early settlement payoff',
+      notes: dto.notes ?? "Early settlement payoff",
       allocatedPrincipal: roundTo(alloc.principalAllocated),
       allocatedInterest: roundTo(alloc.interestAllocated),
       allocatedLateFee: roundTo(alloc.lateFeeAllocated + Math.max(0, leftover)),
@@ -429,7 +468,7 @@ export class LoansService {
         method: record.paymentMethod,
         referenceNumber: record.referenceNumber,
         receivedBy: record.receivedBy,
-        notes: record.notes ?? '',
+        notes: record.notes ?? "",
       },
     });
 
@@ -455,12 +494,19 @@ export class LoansService {
       customerName: loan.customerName,
       amount: record.amount,
     });
-    return { status: entry.status as 'SENT' | 'FAILED', recipient: entry.recipient, message };
+    return {
+      status: entry.status as "SENT" | "FAILED",
+      recipient: entry.recipient,
+      message,
+    };
   }
 
   private formatPaymentMessage(loan: Loan, record: PaymentRecord): string {
-    return `Dear ${loan.customerName}, LKR ${record.amount.toLocaleString('en-LK', {
-      minimumFractionDigits: 2,
-    })} received for Loan ${loan.accountNumber}. Thank you, SMV Holdings.`;
+    return `Dear ${loan.customerName}, LKR ${record.amount.toLocaleString(
+      "en-LK",
+      {
+        minimumFractionDigits: 2,
+      },
+    )} received for Loan ${loan.accountNumber}. Thank you, SMV Holdings.`;
   }
 }

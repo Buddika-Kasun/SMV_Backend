@@ -11,11 +11,11 @@ import {
 export class CreateConsultancyDto {
   @IsString()
   @IsNotEmpty()
-  customerName: string;
+  customerName!: string;
 
   @IsString()
   @IsNotEmpty()
-  customerPhone: string;
+  customerPhone!: string;
 
   @IsOptional()
   @IsEmail()
@@ -23,18 +23,18 @@ export class CreateConsultancyDto {
 
   @IsString()
   @IsNotEmpty()
-  nationalIdNumber: string;
+  nationalIdNumber!: string;
 
   @IsString()
   @IsNotEmpty()
-  bankName: string;
+  bankName!: string;
 
   @IsString()
   @IsNotEmpty()
-  accountNumber: string;
+  accountNumber!: string;
 
   @IsNumber()
-  lastStatementBalance: number;
+  lastStatementBalance!: number;
 
   @IsOptional()
   @IsString()
@@ -42,11 +42,11 @@ export class CreateConsultancyDto {
 
   @IsNumber()
   @Min(1)
-  placedAmount: number;
+  placedAmount!: number;
 
   @IsString()
   @IsNotEmpty()
-  startDate: string;
+  startDate!: string;
 
   @IsOptional()
   @IsNumber()
@@ -62,21 +62,21 @@ const RETURN_METHODS = ['Bank Transfer', 'Cheque', 'Cash', 'Direct Deposit'];
 export class ReturnFundsDto {
   @IsString()
   @IsNotEmpty()
-  returnDate: string;
+  returnDate!: string;
 
   @IsNumber()
-  returnedAmount: number;
+  returnedAmount!: number;
 
   @IsIn(RETURN_METHODS)
-  paymentMethod: 'Bank Transfer' | 'Cheque' | 'Cash' | 'Direct Deposit';
+  paymentMethod!: 'Bank Transfer' | 'Cheque' | 'Cash' | 'Direct Deposit';
 
   @IsString()
   @IsNotEmpty()
-  referenceNumber: string;
+  referenceNumber!: string;
 
   @IsString()
   @IsNotEmpty()
-  processedBy: string;
+  processedBy!: string;
 
   @IsOptional()
   @IsString()

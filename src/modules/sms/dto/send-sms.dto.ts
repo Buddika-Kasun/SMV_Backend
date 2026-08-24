@@ -3,11 +3,11 @@ import { IsNotEmpty, IsNumber, IsOptional, IsString } from 'class-validator';
 export class SendSmsDto {
   @IsString()
   @IsNotEmpty()
-  recipient: string;
+  recipient!: string;
 
   @IsString()
   @IsNotEmpty()
-  message: string;
+  message!: string;
 
   @IsOptional()
   @IsString()

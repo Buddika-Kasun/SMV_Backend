@@ -11,24 +11,24 @@ import { UserRole } from '../../../shared/types';
 export class CreateUserDto {
   @IsString()
   @IsNotEmpty()
-  fullName: string;
+  fullName!: string;
 
   @IsString()
   @IsNotEmpty()
   @MinLength(4)
-  username: string;
+  username!: string;
 
   @IsString()
   @IsNotEmpty()
   @MinLength(6)
-  password: string;
+  password!: string;
 
   @IsIn(['admin', 'manager', 'staff'])
-  role: UserRole;
+  role!: UserRole;
 
   @IsString()
   @IsNotEmpty()
-  designation: string;
+  designation!: string;
 
   @IsOptional()
   @IsEmail()

@@ -14,18 +14,18 @@ const PAYMENT_METHODS = ['Cash', 'Bank Transfer', 'Debit/Credit Card', 'Direct D
 export class RecordPaymentDto {
   @IsNumber()
   @Min(0.01)
-  amount: number;
+  amount!: number;
 
   @IsIn(PAYMENT_METHODS)
-  paymentMethod: PaymentRecord['paymentMethod'];
+  paymentMethod!: PaymentRecord['paymentMethod'];
 
   @IsString()
   @IsNotEmpty()
-  referenceNumber: string;
+  referenceNumber!: string;
 
   @IsString()
   @IsNotEmpty()
-  receivedBy: string;
+  receivedBy!: string;
 
   @IsOptional()
   @IsString()
@@ -43,15 +43,15 @@ export class ExecuteSettlementDto {
   quote?: EarlySettlementQuote;
 
   @IsIn(PAYMENT_METHODS)
-  paymentMethod: PaymentRecord['paymentMethod'];
+  paymentMethod!: PaymentRecord['paymentMethod'];
 
   @IsString()
   @IsNotEmpty()
-  referenceNumber: string;
+  referenceNumber!: string;
 
   @IsString()
   @IsNotEmpty()
-  receivedBy: string;
+  receivedBy!: string;
 
   @IsOptional()
   @IsString()

@@ -21,11 +21,11 @@ const METHODS = ['Flat Rate', 'Reducing Balance'];
 export class CreateLoanDto {
   @IsString()
   @IsNotEmpty()
-  customerName: string;
+  customerName!: string;
 
   @IsString()
   @IsNotEmpty()
-  customerPhone: string;
+  customerPhone!: string;
 
   @IsOptional()
   @IsEmail()
@@ -33,65 +33,65 @@ export class CreateLoanDto {
 
   @IsString()
   @IsNotEmpty()
-  nationalIdNumber: string;
+  nationalIdNumber!: string;
 
   @IsIn(LOAN_TYPES)
-  loanType: LoanType;
+  loanType!: LoanType;
 
   @IsNumber()
   @Min(0.01)
-  requestedAmount: number;
+  requestedAmount!: number;
 
   @IsNumber()
   @Min(1)
-  interestRatePerAnnum: number;
+  interestRatePerAnnum!: number;
 
   @IsInt()
   @Min(1)
-  termMonths: number;
+  termMonths!: number;
 
   @IsIn(FREQUENCIES)
-  repaymentFrequency: RepaymentFrequency;
+  repaymentFrequency!: RepaymentFrequency;
 
   @IsIn(METHODS)
-  interestMethod: InterestMethod;
+  interestMethod!: InterestMethod;
 
   @IsString()
   @IsNotEmpty()
-  purpose: string;
+  purpose!: string;
 
   @IsNumber()
-  monthlyIncome: number;
+  monthlyIncome!: number;
 
   @IsString()
-  occupation: string;
+  occupation!: string;
 
   @IsString()
-  employerName: string;
-
-  @IsString()
-  @IsNotEmpty()
-  addressLine: string;
+  employerName!: string;
 
   @IsString()
   @IsNotEmpty()
-  city: string;
+  addressLine!: string;
 
   @IsString()
-  postalCode: string;
+  @IsNotEmpty()
+  city!: string;
 
   @IsString()
-  guarantorName: string;
+  postalCode!: string;
 
   @IsString()
-  guarantorPhone: string;
+  guarantorName!: string;
 
   @IsString()
-  guarantorRelation: string;
+  guarantorPhone!: string;
 
   @IsString()
-  bankName: string;
+  guarantorRelation!: string;
 
   @IsString()
-  accountNumber: string;
+  bankName!: string;
+
+  @IsString()
+  accountNumber!: string;
 }
