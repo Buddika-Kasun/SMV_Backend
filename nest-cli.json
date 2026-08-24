@@ -1,0 +1,6 @@
+{
+  "sourceFolder": "./src",
+  "distFolder": "./dist",
+  "deployFolder": "./deploy",
+  "migrationFolder": "./migrations"
+}

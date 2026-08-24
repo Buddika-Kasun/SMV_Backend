@@ -1,0 +1,37 @@
+# Compiled output
+dist/
+deploy/
+npm-debug.log
+
+# Environment
+.env
+*.env.local
+.env.*.local
+
+# Node
+node_modules/
+package-lock.json
+
+# Database
+prisma/*.db
+*.sqlite
+
+# Prisma generated client
+src/generated/prisma/
+prisma/generated/
+
+# Logs
+logs/
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# Uploaded passbooks (runtime uploads)
+uploads/
