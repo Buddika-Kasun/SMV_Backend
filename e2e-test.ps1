@@ -14,7 +14,25 @@ try {
   $login = Invoke-RestMethod -Method Post -Uri "$base/auth/login" -ContentType 'application/json' `
     -Body '{"username":"sysadmin","password":"Admin@123"}'
   Check 'login returns token' ([bool]$login.token -and $login.success)
+  Check 'login returns access + refresh tokens' ([bool]$login.accessToken -and [bool]$login.refreshToken)
   $headers = @{ Authorization = "Bearer $($login.token)" }
+
+  # --- Auth refresh-token round-trip ---
+  $refreshed = Invoke-RestMethod -Method Post -Uri "$base/auth/refresh" -ContentType 'application/json' `
+    -Body (@{ refreshToken = $login.refreshToken } | ConvertTo-Json)
+  Check 'refresh issues new access + refresh tokens' ([bool]$refreshed.accessToken -and [bool]$refreshed.refreshToken)
+
+  $meRefreshed = Invoke-RestMethod -Method Get -Uri "$base/auth/me" `
+    -Headers @{ Authorization = "Bearer $($refreshed.accessToken)" }
+  Check 'refreshed access token authenticates' ([bool]$meRefreshed.data.id)
+
+  # The refresh endpoint must reject an access token used in its place.
+  $rejectWorked = $false
+  try {
+    Invoke-RestMethod -Method Post -Uri "$base/auth/refresh" -ContentType 'application/json' `
+      -Body (@{ refreshToken = $login.accessToken } | ConvertTo-Json) | Out-Null
+  } catch { $rejectWorked = $true }
+  Check 'access token rejected at refresh endpoint' $rejectWorked
 
   # --- Consultancy passbook presigned upload round-trip ---
   $agreement = Invoke-RestMethod -Method Post -Uri "$base/consultancy/agreements" `

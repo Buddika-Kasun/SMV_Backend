@@ -146,8 +146,9 @@ always get a fresh, non-expired link.
 | ------------------- | ----------------------------------------- |
 | `PORT`              | HTTP listener (default 3000)              |
 | `DATABASE_URL`      | PostgreSQL connection string              |
-| `JWT_SECRET`        | Token signing secret                      |
+| `JWT_SECRET`        | Access-token signing secret               |
 | `JWT_EXPIRES_IN`    | `7d` default                              |
+| `JWT_REFRESH_SECRET` / `JWT_REFRESH_EXPIRES_IN` | Separate refresh-token key & `30d` default |
 | `TEXT_LK_API_KEY`   | Empty ⇒ SMS logged without live dispatch  |
 | `TEXT_LK_SENDER_ID` | Sender name on Text.lk                    |
 | `CORS_ORIGINS`      | Comma-separated allowed origins           |
@@ -160,10 +161,15 @@ always get a fresh, non-expired link.
 Authentication & RBAC guard all routes. Sample calls:
 
 ```bash
-# login
+# login (returns accessToken, refreshToken and legacy token alias)
 curl -X POST http://localhost:3000/api/auth/login \
   -H "Content-Type: application/json" \
   -d '{"username":"sysadmin","password":"Admin@123"}'
+
+# refresh (rotate the token pair without re-entering credentials)
+curl -X POST http://localhost:3000/api/auth/refresh \
+  -H "Content-Type: application/json" \
+  -d '{"refreshToken":"<refreshToken from login>"}'
 
 # create loan (Bearer token required)
 curl -X POST http://localhost:3000/api/loans \
@@ -183,7 +189,7 @@ curl -X GET http://localhost:3000/api/reports/summary \
 
 **Modules overview:**
 
-- `auth`: `POST /api/auth/login`, `GET /api/auth/me`
+- `auth`: `POST /api/auth/login`, `POST /api/auth/refresh`, `GET /api/auth/me`
 - `users`: `GET/POST /api/users`, `PUT/DELETE /api/users/:id`, `POST /api/users/reset-defaults`
 - `loans`: `GET /api/loans`, `GET/POST /api/loans/:id`,
   `POST :id/approve`, `POST :id/reject`, `PUT :id/kyc`, `POST :id/disburse`,
