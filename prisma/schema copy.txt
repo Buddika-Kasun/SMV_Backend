@@ -1,0 +1,115 @@
+// ============================================================
+// SMV Holdings - Prisma Schema (PostgreSQL)
+// Reflects the 5-table database schema from the backend spec.
+// JSONB "data" columns store full nested domain objects
+// (installments, kyc, payments, quotes, return records, ...).
+// ============================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ------------------------------------------------------------
+// 1. Users
+// ------------------------------------------------------------
+model User {
+  id            String    @id
+  username      String    @unique
+  passwordHash  String    @map("password_hash")
+  fullName      String    @map("full_name")
+  role          String
+  designation   String
+  email         String?
+  phone         String?
+  isActive      Boolean   @default(true) @map("is_active")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  lastLogin     DateTime? @map("last_login")
+
+  @@map("users")
+}
+
+// ------------------------------------------------------------
+// 2. Loans
+// ------------------------------------------------------------
+model Loan {
+  id              String    @id
+  accountNumber   String    @unique @map("account_number")
+  customerName    String    @map("customer_name")
+  customerPhone   String    @map("customer_phone")
+  customerEmail   String?   @map("customer_email")
+  loanType        String    @map("loan_type")
+  requestedAmount Decimal   @map("requested_amount")
+  disbursedAmount Decimal   @default(0) @map("disbursed_amount")
+  interestRate    Decimal   @map("interest_rate")
+  termMonths      Int       @map("term_months")
+  status          String
+  requestedDate   DateTime  @default(now()) @map("requested_date")
+  data            Json      // full Loan domain object (installments, kyc, payments, quotes)
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  payments Payment[]
+
+  @@map("loans")
+}
+
+// ------------------------------------------------------------
+// 3. Payments
+// ------------------------------------------------------------
+model Payment {
+  id              String   @id
+  loanId          String    @map("loan_id")
+  customerName    String    @map("customer_name")
+  amount          Decimal
+  paymentDate     DateTime  @default(now()) @map("payment_date")
+  method          String    @map("payment_method")
+  referenceNumber String?   @map("reference_number")
+  receivedBy      String?   @map("received_by")
+  notes           String?
+  createdAt       DateTime  @default(now()) @map("created_at")
+
+  loan Loan? @relation(fields: [loanId], references: [id], onDelete: Cascade)
+
+  @@map("payments")
+}
+
+// ------------------------------------------------------------
+// 4. SMS Logs
+// ------------------------------------------------------------
+model SmsLog {
+  id        String   @id
+  recipient String
+  message   String
+  loanId    String?  @map("loan_id")
+  status    String
+  data      Json
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("sms_logs")
+}
+
+// ------------------------------------------------------------
+// 5. Consultancy Agreements
+// ------------------------------------------------------------
+model ConsultancyAgreement {
+  id               String   @id
+  agreementNumber  String   @unique @map("agreement_number")
+  customerName     String   @map("customer_name")
+  customerPhone    String   @map("customer_phone")
+  customerEmail    String?  @map("customer_email")
+  nationalIdNumber String   @map("national_id_number")
+  placedAmount     Decimal  @map("placed_amount")
+  startDate        DateTime @map("start_date")
+  maturityDate     DateTime @map("maturity_date")
+  status           String
+  passbookKey      String?  @map("passbook_key") // object key in storage bucket
+  data             Json
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  @@map("consultancy_agreements")
+}

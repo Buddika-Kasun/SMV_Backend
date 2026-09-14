@@ -1,17 +1,14 @@
-/** Deterministic, human-readable ID generators matching the spec examples. */
+/**
+ * Deterministic, human-readable ID generators matching the spec examples.
+ */
 
 function pad(value: number, width: number): string {
-  return String(value).padStart(width, '0');
+  return String(value).padStart(width, "0");
 }
 
 /** e.g. USR-0001 */
 export function userId(seq: number): string {
   return `USR-${pad(seq, 4)}`;
-}
-
-/** e.g. CUST-0001 */
-export function customerId(seq: number): string {
-  return `CUST-${pad(seq, 4)}`;
 }
 
 /** e.g. LN-2026-0001 (uses the current year). */
@@ -41,8 +38,8 @@ export function smsLogId(seq: number): string {
 
 /** Short random suffix for file-based document ids. */
 export function randomSuffix(length = 6): string {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-  let out = '';
+  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+  let out = "";
   for (let i = 0; i < length; i++) {
     out += chars.charAt(Math.floor(Math.random() * chars.length));
   }
@@ -50,7 +47,7 @@ export function randomSuffix(length = 6): string {
 }
 
 /** Generate account number for customers */
-export function accountNumber(): string {
+export function generateAccountNumber(): string {
   const random = Math.floor(100000 + Math.random() * 900000);
   return `ACC-${random}`;
 }

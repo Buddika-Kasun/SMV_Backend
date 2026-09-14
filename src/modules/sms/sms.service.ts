@@ -58,10 +58,10 @@ export class SmsService {
       entry.gatewayResponse = { simulated: true, note: 'SMS_API_KEY not configured; logged only.' };
     }
 
-    const seq = await this.prisma.smsLog.count();
+    const seq = await this.prisma.sMSLog.count();
     entry.id = smsLogId(seq + 1);
 
-    await this.prisma.smsLog.create({
+    await this.prisma.sMSLog.create({
       data: {
         id: entry.id,
         recipient: entry.recipient,
@@ -77,7 +77,7 @@ export class SmsService {
   }
 
   async logs(limit = 100): Promise<SMSLogEntry[]> {
-    const rows = await this.prisma.smsLog.findMany({
+    const rows = await this.prisma.sMSLog.findMany({
       orderBy: { createdAt: 'desc' },
       take: Math.min(limit, 500),
     });

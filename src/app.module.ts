@@ -7,17 +7,23 @@ import { LoansModule } from './modules/loan/loans.module';
 import { ConsultancyModule } from './modules/consultancy/consultancy.module';
 import { SmsModule } from './modules/sms/sms.module';
 import { ReportsModule } from './modules/reports/reports.module';
+import { PaginationModule } from './common/pagination.module';
+import { CustomersModule } from './modules/customer/customers.module';
+import { DashboardModule } from './modules/dashboard/dashboard.module';
 
 @Module({
   imports: [
+    PaginationModule,
     PrismaModule,
     SecurityModule,
     AuthModule,
     UsersModule,
     LoansModule,
+    CustomersModule,
     ConsultancyModule,
     SmsModule,
     ReportsModule,
+    DashboardModule,
   ],
 })
 export class AppModule {}

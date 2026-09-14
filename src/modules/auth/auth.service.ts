@@ -1,10 +1,14 @@
-import { Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
-import { JwtService } from '@nestjs/jwt';
-import * as bcrypt from 'bcryptjs';
-import { PrismaService } from '../../config/prisma.service';
-import { config } from '../../config/env';
-import { User } from '../../shared/types';
-import { LoginDto } from './dto/login.dto';
+import {
+  Injectable,
+  NotFoundException,
+  UnauthorizedException,
+} from "@nestjs/common";
+import { JwtService } from "@nestjs/jwt";
+import * as bcrypt from "bcryptjs";
+import { PrismaService } from "../../config/prisma.service";
+import { config } from "../../config/env";
+import { User } from "../../shared/types";
+import { LoginDto } from "./dto/login.dto";
 
 /** Pair of JWTs handed out on login / refresh. */
 export interface AuthTokens {
@@ -12,6 +16,8 @@ export interface AuthTokens {
   accessToken: string;
   /** Long-lived JWT accepted only by `POST /api/auth/refresh`. */
   refreshToken: string;
+  /** Expiry of the access token in seconds since the epoch. */
+  expiresIn: number;
 }
 
 export interface LoginResult extends AuthTokens {
@@ -19,7 +25,7 @@ export interface LoginResult extends AuthTokens {
    * Legacy alias of `accessToken`, kept so existing clients reading `token`
    * keep working.
    */
-  user: Omit<User, 'password'>;
+  user: Omit<User, "password">;
 }
 
 interface UserRowLike {
@@ -39,7 +45,7 @@ interface UserRowLike {
 interface RefreshTokenPayload {
   sub: string;
   username: string;
-  type: 'refresh';
+  type: "refresh";
   iat?: number;
   exp?: number;
 }
@@ -52,14 +58,16 @@ export class AuthService {
   ) {}
 
   async login(input: LoginDto): Promise<LoginResult> {
-    const user = await this.prisma.user.findUnique({ where: { username: input.username } });
+    const user = await this.prisma.user.findUnique({
+      where: { username: input.username },
+    });
     if (!user || !user.isActive) {
-      throw new UnauthorizedException('Invalid username or password');
+      throw new UnauthorizedException("Invalid username or password");
     }
 
     const valid = await bcrypt.compare(input.password, user.passwordHash);
     if (!valid) {
-      throw new UnauthorizedException('Invalid username or password');
+      throw new UnauthorizedException("Invalid username or password");
     }
 
     await this.prisma.user.update({
@@ -82,38 +90,49 @@ export class AuthService {
         secret: config.jwt.refreshSecret,
       })) as RefreshTokenPayload;
     } catch {
-      throw new UnauthorizedException('Invalid or expired refresh token');
+      throw new UnauthorizedException("Invalid or expired refresh token");
     }
 
-    if (!payload?.sub || payload.type !== 'refresh') {
-      throw new UnauthorizedException('Invalid refresh token');
+    if (!payload?.sub || payload.type !== "refresh") {
+      throw new UnauthorizedException("Invalid refresh token");
     }
 
-    const user = await this.prisma.user.findUnique({ where: { id: payload.sub } });
+    const user = await this.prisma.user.findUnique({
+      where: { id: payload.sub },
+    });
     if (!user || !user.isActive) {
-      throw new UnauthorizedException('User account not found or inactive');
+      throw new UnauthorizedException("User account not found or inactive");
     }
 
     return this.issueTokens(user);
   }
 
-  async me(userId: string): Promise<Omit<User, 'password'>> {
+  async me(userId: string): Promise<Omit<User, "password">> {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
-    if (!user) throw new NotFoundException('User not found');
+    if (!user) throw new NotFoundException("User not found");
     return this.toPublicUser(user);
   }
 
   /** Signs both tokens: access with the main secret, refresh with its own. */
   private signTokens(
-    user: Pick<UserRowLike, 'id' | 'username' | 'fullName' | 'role' | 'designation'>,
+    user: Pick<
+      UserRowLike,
+      "id" | "username" | "fullName" | "role" | "designation"
+    >,
   ): AuthTokens {
-    const accessToken = this.jwt.sign({
-      sub: user.id,
-      username: user.username,
-      fullName: user.fullName,
-      role: user.role,
-      designation: user.designation,
-    });
+    const accessToken = this.jwt.sign(
+      {
+        sub: user.id,
+        username: user.username,
+        fullName: user.fullName,
+        role: user.role,
+        designation: user.designation,
+      },
+      {
+        secret: config.jwt.secret,
+        expiresIn: config.jwt.expiresIn as any,
+      },
+    );
 
     // Separate secret + explicit expiry so refresh tokens are unusable at
     // regular endpoints (JwtAuthGuard verifies with the access secret).
@@ -121,7 +140,7 @@ export class AuthService {
       {
         sub: user.id,
         username: user.username,
-        type: 'refresh' as const,
+        type: "refresh" as const,
       },
       {
         secret: config.jwt.refreshSecret,
@@ -129,7 +148,10 @@ export class AuthService {
       },
     );
 
-    return { accessToken, refreshToken };
+    // Decode the token to get the expiration
+    const decoded = this.jwt.decode(accessToken) as { exp?: number };
+
+    return { accessToken, refreshToken, expiresIn: decoded.exp || 0 };
   }
 
   private issueTokens(user: UserRowLike): LoginResult {
@@ -140,12 +162,12 @@ export class AuthService {
     };
   }
 
-  private toPublicUser(user: UserRowLike): Omit<User, 'password'> {
+  private toPublicUser(user: UserRowLike): Omit<User, "password"> {
     return {
       id: user.id,
       username: user.username,
       fullName: user.fullName,
-      role: user.role as User['role'],
+      role: user.role as User["role"],
       designation: user.designation,
       email: user.email ?? undefined,
       phone: user.phone ?? undefined,

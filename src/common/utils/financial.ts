@@ -266,7 +266,7 @@ export interface AllocationResult {
   coveredInstallmentNumbers: number[];
 }
 
-export function allocatePayment(loan: Loan, amount: number, referenceDate?: string): AllocationResult {
+export function allocatePayment(loan: any, amount: number, referenceDate?: string): AllocationResult {
   const today = referenceDate ?? todayISO();
   const result: AllocationResult = {
     lateFeeAllocated: 0,

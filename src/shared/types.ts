@@ -4,13 +4,13 @@
 // ============================================================
 
 export type LoanType =
-  | 'Instant Personal'
-  | 'Standard Personal'
-  | 'Business Expansion'
-  | 'Micro Enterprise'
-  | 'Emergency Quick';
+  | "Instant Personal"
+  | "Standard Personal"
+  | "Business Expansion"
+  | "Micro Enterprise"
+  | "Emergency Quick";
 
-export type UserRole = 'admin' | 'manager' | 'staff';
+export type UserRole = "admin" | "manager" | "staff";
 
 export interface User {
   id: string;
@@ -26,30 +26,34 @@ export interface User {
   lastLogin?: string;
 }
 
-export type RepaymentFrequency = 'Monthly' | 'Bi-Weekly' | 'Weekly';
+export type RepaymentFrequency = "Monthly" | "Bi-Weekly" | "Weekly";
 
-export type InterestMethod = 'Flat Rate' | 'Reducing Balance';
+export type InterestMethod = "Flat Rate" | "Reducing Balance";
 
 export type LoanStatus =
-  | 'Pending Approval'
-  | 'KYC Pending'
-  | 'Approved - Pending Disbursement'
-  | 'Active'
-  | 'Overdue'
-  | 'Settled'
-  | 'Early Settled'
-  | 'Rejected';
+  | "Pending Approval"
+  | "KYC Pending"
+  | "Approved - Pending Disbursement"
+  | "Active"
+  | "Overdue"
+  | "Settled"
+  | "Early Settled"
+  | "Rejected";
 
-export type InstallmentStatus = 'Paid' | 'Pending' | 'Overdue' | 'Partially Paid';
+export type InstallmentStatus =
+  | "Paid"
+  | "Pending"
+  | "Overdue"
+  | "Partially Paid";
 
 export type KYCDocumentType =
-  | 'National ID / Passport'
-  | 'Proof of Address'
-  | 'Pay Slip / Bank Statement'
-  | 'Guarantor ID'
-  | 'Business Registration';
+  | "National ID / Passport"
+  | "Proof of Address"
+  | "Pay Slip / Bank Statement"
+  | "Guarantor ID"
+  | "Business Registration";
 
-export type KYCDocumentStatus = 'Verified' | 'Pending Review' | 'Rejected';
+export type KYCDocumentStatus = "Verified" | "Pending Review" | "Rejected";
 
 export interface KYCDocument {
   id: string;
@@ -64,7 +68,7 @@ export interface KYCDocument {
 
 export interface KYCData {
   nationalIdNumber: string;
-  idType: 'NIC' | 'Passport' | 'Driver License';
+  idType: "NIC" | "Passport" | "Driver License";
   dateOfBirth: string;
   gender: string;
   occupation: string;
@@ -76,12 +80,34 @@ export interface KYCData {
   guarantorName: string;
   guarantorPhone: string;
   guarantorRelation: string;
-  bankName: string;
-  accountNumber: string;
+  // bankName: string;
+  // accountNumber: string;
   documents: KYCDocument[];
   isVerified: boolean;
   verifiedBy?: string;
   verifiedAt?: string;
+}
+
+export interface KYCPayload {
+  kycData: {
+    customer: {
+      idNumber: string;
+      idType: string;
+      dateOfBirth: string;
+      gender: string;
+      occupation: string;
+      employerName: string;
+      monthlyIncome: string;
+      addressLine: string;
+      city: string;
+      postalCode: string;
+    };
+    guarantor: {
+      fullName: string;
+      phone: string;
+      relation: string;
+    };
+  };
 }
 
 export interface Installment {
@@ -107,15 +133,22 @@ export interface PaymentRecord {
   customerName: string;
   amount: number;
   paymentDate: string;
-  paymentMethod: 'Cash' | 'Bank Transfer' | 'Debit/Credit Card' | 'Direct Debit' | 'Cheque';
+  paymentMethod:
+    | "Cash"
+    | "Bank_Transfer"
+    | "Debit_Credit_Card"
+    | "Direct_Debit"
+    | "Cheque";
   referenceNumber: string;
   receivedBy: string;
   notes?: string;
   allocatedPrincipal: number;
   allocatedInterest: number;
   allocatedLateFee: number;
+  principalPortion: number; // ← new
+  interestPortion: number;
   installmentNumbersCovered: number[];
-  smsStatus?: 'SENT' | 'FAILED' | 'PENDING' | 'SKIPPED';
+  smsStatus?: "SENT" | "FAILED" | "PENDING" | "SKIPPED";
   smsRecipient?: string;
   smsMessage?: string;
 }
@@ -189,22 +222,22 @@ export interface SMSLogEntry {
   loanId?: string;
   customerName?: string;
   amount?: number;
-  status: 'DELIVERED' | 'SENT' | 'FAILED';
+  status: "DELIVERED" | "SENT" | "FAILED";
   gatewayResponse?: any;
   error?: string;
 }
 
 export type ConsultancyStatus =
-  | 'Active Placed'
-  | 'Maturing Soon'
-  | 'Maturity Reached'
-  | 'Returned & Closed';
+  | "Active Placed"
+  | "Maturing Soon"
+  | "Maturity Reached"
+  | "Returned & Closed";
 
 export interface ConsultancyReturnRecord {
   id: string;
   returnDate: string;
   returnedAmount: number;
-  paymentMethod: 'Bank Transfer' | 'Cheque' | 'Cash' | 'Direct Deposit';
+  paymentMethod: "Bank Transfer" | "Cheque" | "Cash" | "Direct Deposit";
   referenceNumber: string;
   processedBy: string;
   notes?: string;
@@ -286,7 +319,7 @@ export interface CreateLoanPayload {
 export interface RecordPaymentPayload {
   loanId: string;
   amount: number;
-  paymentMethod: PaymentRecord['paymentMethod'];
+  paymentMethod: PaymentRecord["paymentMethod"];
   referenceNumber: string;
   receivedBy: string;
   notes?: string;
@@ -296,7 +329,7 @@ export interface RecordPaymentPayload {
 export interface ExecuteSettlementPayload {
   loanId: string;
   quote: EarlySettlementQuote;
-  paymentMethod: PaymentRecord['paymentMethod'];
+  paymentMethod: PaymentRecord["paymentMethod"];
   referenceNumber: string;
   receivedBy: string;
   notes?: string;
@@ -325,5 +358,5 @@ export interface CreateConsultancyPayload {
 
 export interface ReturnConsultancyPayload {
   agreementId: string;
-  returnRecord: ConsultancyAgreement['returnRecord'];
+  returnRecord: ConsultancyAgreement["returnRecord"];
 }

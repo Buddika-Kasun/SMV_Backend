@@ -7,130 +7,188 @@ import {
   IsOptional,
   IsString,
   Min,
-} from 'class-validator';
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import {
-  InterestMethod,
-  LoanType,
-  RepaymentFrequency,
-} from '../../../shared/types';
+} from "class-validator";
+import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
+import { Optional } from "@nestjs/common";
 
-const LOAN_TYPES = ['Instant Personal', 'Standard Personal', 'Business Expansion', 'Micro Enterprise', 'Emergency Quick'];
-const FREQUENCIES = ['Monthly', 'Bi-Weekly', 'Weekly'];
-const METHODS = ['Flat Rate', 'Reducing Balance'];
+const LOAN_TYPES = [
+  "Instant_Personal",
+  "Standard_Personal",
+  "Business_Expansion",
+  "Micro_Enterprise",
+  "Emergency_Quick",
+];
+const FREQUENCIES = ["Monthly", "Bi-Weekly", "Weekly"];
+const METHODS = ["Flat_Rate", "Reducing_Balance"];
 
 export class CreateLoanDto {
-  @ApiProperty({ description: "Customer's full name.", example: 'John Doe' })
+  @ApiProperty({ description: "Customer's full name.", example: "John Doe" })
   @IsString()
   @IsNotEmpty()
   customerName!: string;
 
-  @ApiProperty({ description: "Customer's contact phone number.", example: '+94 77 123 4567' })
+  @ApiProperty({
+    description: "Customer's contact phone number.",
+    example: "+94 77 123 4567",
+  })
   @IsString()
   @IsNotEmpty()
   customerPhone!: string;
 
   @ApiPropertyOptional({
     description: "Customer's e-mail address.",
-    format: 'email',
-    example: 'john.doe@example.com',
+    format: "email",
+    example: "john.doe@example.com",
   })
   @IsOptional()
   @IsEmail()
   customerEmail?: string;
 
-  @ApiProperty({ description: 'National identity card or passport number.', example: '199012345678' })
+  @ApiProperty({
+    description: "National identity card or passport number.",
+    example: "199012345678",
+  })
   @IsString()
   @IsNotEmpty()
-  nationalIdNumber!: string;
+  idNumber!: string;
 
   @ApiProperty({
     enum: LOAN_TYPES,
-    description: 'Product type requested by the customer.',
-    example: 'Standard Personal',
+    description: "Product type requested by the customer.",
+    example: "Standard Personal",
   })
   @IsIn(LOAN_TYPES)
-  loanType!: LoanType;
+  loanType!: string;
 
-  @ApiProperty({ description: 'Amount the customer wishes to borrow.', example: 250000, minimum: 0.01 })
+  @ApiProperty({
+    description: "Amount the customer wishes to borrow.",
+    example: 250000,
+    minimum: 0.01,
+  })
   @IsNumber()
   @Min(0.01)
   requestedAmount!: number;
 
-  @ApiProperty({ description: 'Nominal annual interest rate in percent.', example: 24, minimum: 1 })
+  @ApiProperty({
+    description: "Nominal annual interest rate in percent.",
+    example: 24,
+    minimum: 1,
+  })
   @IsNumber()
   @Min(1)
   interestRatePerAnnum!: number;
 
-  @ApiProperty({ description: 'Loan term in months.', example: 12, minimum: 1 })
+  @ApiProperty({
+    description: "Loan term in months.",
+    example: 12,
+    minimum: 1,
+  })
   @IsInt()
   @Min(1)
   termMonths!: number;
 
   @ApiProperty({
     enum: FREQUENCIES,
-    description: 'How often installments fall due.',
-    example: 'Monthly',
+    description: "How often installments fall due.",
+    example: "Monthly",
   })
   @IsIn(FREQUENCIES)
-  repaymentFrequency!: RepaymentFrequency;
+  repaymentFrequency!: string;
 
   @ApiProperty({
     enum: METHODS,
-    description: 'Interest calculation method applied to the schedule.',
-    example: 'Flat Rate',
+    description: "Interest calculation method applied to the schedule.",
+    example: "Flat Rate",
   })
   @IsIn(METHODS)
-  interestMethod!: InterestMethod;
+  interestMethod!: string;
 
-  @ApiProperty({ description: 'Stated purpose of the loan.', example: 'Home renovation' })
+  @ApiProperty({
+    description: "Stated purpose of the loan.",
+    example: "Home renovation",
+  })
   @IsString()
-  @IsNotEmpty()
-  purpose!: string;
+  @IsOptional()
+  purpose?: string;
 
-  @ApiProperty({ description: "Customer's declared monthly income.", example: 85000 })
+  @ApiProperty({
+    description: "Customer's declared monthly income.",
+    example: 85000,
+  })
   @IsNumber()
-  monthlyIncome!: number;
+  @IsOptional()
+  monthlyIncome?: number;
 
-  @ApiProperty({ description: "Customer's current occupation.", example: 'Software Engineer' })
-  @IsString()
-  occupation!: string;
+  // @ApiProperty({
+  //   description: "Customer's current occupation.",
+  //   example: "Software Engineer",
+  // })
+  // @IsString()
+  // @IsOptional()
+  // occupation?: string;
 
-  @ApiProperty({ description: "Customer's employer / business name.", example: 'ABC (Pvt) Ltd' })
-  @IsString()
-  employerName!: string;
+  // @ApiProperty({
+  //   description: "Customer's employer / business name.",
+  //   example: "ABC (Pvt) Ltd",
+  // })
+  // @IsString()
+  // employerName!: string;
 
-  @ApiProperty({ description: 'Street address line.', example: 'No. 12, Galle Road' })
+  @ApiProperty({
+    description: "Street address line.",
+    example: "No. 12, Galle Road",
+  })
   @IsString()
-  @IsNotEmpty()
-  addressLine!: string;
+  @IsOptional()
+  addressLine?: string;
 
-  @ApiProperty({ description: 'City name.', example: 'Colombo' })
+  @ApiProperty({ description: "City name.", example: "Colombo" })
   @IsString()
-  @IsNotEmpty()
-  city!: string;
+  @IsOptional()
+  city?: string;
 
-  @ApiProperty({ description: 'Postal / ZIP code.', example: '00300' })
+  @ApiProperty({ description: "Postal / ZIP code.", example: "00300" })
   @IsString()
-  postalCode!: string;
+  @IsOptional()
+  postalCode?: string;
 
-  @ApiProperty({ description: "Guarantor's full name.", example: 'Kamal Silva' })
+  @ApiProperty({
+    description: "Guarantor's full name.",
+    example: "Kamal Silva",
+  })
   @IsString()
-  guarantorName!: string;
+  @IsOptional()
+  guarantorName?: string;
 
-  @ApiProperty({ description: "Guarantor's contact phone number.", example: '+94 71 987 6543' })
+  @ApiProperty({
+    description: "Guarantor's contact phone number.",
+    example: "+94 71 987 6543",
+  })
   @IsString()
-  guarantorPhone!: string;
+  @IsOptional()
+  guarantorPhone?: string;
 
-  @ApiProperty({ description: "Guarantor's relationship to the customer.", example: 'Brother' })
+  @ApiProperty({
+    description: "Guarantor's relationship to the customer.",
+    example: "Brother",
+  })
   @IsString()
-  guarantorRelation!: string;
+  @IsOptional()
+  guarantorRelation?: string;
 
-  @ApiProperty({ description: "Customer's bank name for disbursement/collection.", example: 'Commercial Bank' })
-  @IsString()
-  bankName!: string;
+  // @ApiProperty({
+  //   description: "Customer's bank name for disbursement/collection.",
+  //   example: "Commercial Bank",
+  // })
+  // @IsString()
+  // @IsOptional()
+  // bankName?: string;
 
-  @ApiProperty({ description: "Customer's bank account number.", example: '8001234567' })
-  @IsString()
-  accountNumber!: string;
+  // @ApiProperty({
+  //   description: "Customer's bank account number.",
+  //   example: "8001234567",
+  // })
+  // @IsString()
+  // @IsOptional()
+  // accountNumber?: string;
 }

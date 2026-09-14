@@ -1,37 +1,27 @@
-# Compiled output
+# Build output
 dist/
-deploy/
-npm-debug.log
-
-# Environment
-.env
-*.env.local
-.env.*.local
+build/
+out/
 
 # Node
 node_modules/
-package-lock.json
 
-# Database
-prisma/*.db
-*.sqlite
+# TypeScript cache
+*.tsbuildinfo
 
-# Prisma generated client
-src/generated/prisma/
-prisma/generated/
+# Environment
+.env
+.env.local
+.env.*.local
 
 # Logs
-logs/
 *.log
-
-# OS
-.DS_Store
-Thumbs.db
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 
 # IDE
 .vscode/
 .idea/
 *.swp
-
-# Uploaded passbooks (runtime uploads)
-uploads/
+.DS_Store

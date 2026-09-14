@@ -1,0 +1,1 @@
+Passbook uploads are stored here at runtime. This directory is git-ignored.
