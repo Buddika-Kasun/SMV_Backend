@@ -49,14 +49,10 @@ export class AuthController {
     description: 'Invalid username or password, or the account is inactive.',
   })
   async login(@Body() body: LoginDto) {
-    const { accessToken, refreshToken, user } = await this.authService.login(body);
-    return {
-      success: true,
-      message: 'Authentication successful',
-      accessToken,
-      refreshToken,
-      user,
-    };
+    return ok(
+      await this.authService.login(body),
+      "Login successfull",
+    );
   }
 
   /**
@@ -83,14 +79,10 @@ export class AuthController {
   })
   @ApiBadRequestResponse({ description: 'Request body failed validation.' })
   async refresh(@Body() body: RefreshTokenDto) {
-    const { accessToken, refreshToken, user } = await this.authService.refresh(body.refreshToken);
-    return {
-      success: true,
-      message: 'Token refreshed',
-      accessToken,
-      refreshToken,
-      user,
-    };
+    return ok(
+      await this.authService.refresh(body.refreshToken),
+      "Token refreshed",
+    );
   }
 
   /** Profile metadata for the user identified by the presented bearer token. */

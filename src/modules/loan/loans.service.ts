@@ -1161,6 +1161,18 @@ export class LoansService {
       }
     });
 
+    // ---------- SMS alert (best-effort, outside tx) ----------
+    let smsResult: {
+      status: string;
+      recipient: string;
+      message: string;
+    } | null = null;
+    try {
+      smsResult = await this.smsDisbursementAlert(loan, disbursedAmount);
+    } catch (err) {
+      console.error("Disbursement SMS send failed:", err);
+    }
+
     // Optional: persist the note somewhere (e.g. on the loan or a log table)
     // if (body.notes) { ... }
 
@@ -1380,7 +1392,9 @@ export class LoansService {
 
     if (freshPayment) {
       try {
-        smsResult = await this.smsPaymentAlert(loan, freshPayment);
+        smsResult = isFullySettled
+          ? await this.smsSettlementAlert(loan, freshPayment, "final")
+          : await this.smsPaymentAlert(loan, freshPayment);
       } catch (err) {
         // swallow — SMS failure should not break the payment response
         console.error("SMS send failed:", err);
@@ -1558,7 +1572,7 @@ export class LoansService {
 
     if (freshPayment) {
       try {
-        await this.smsPaymentAlert(loan, freshPayment);
+        await this.smsSettlementAlert(loan, freshPayment, "early");
       } catch (err) {
         console.error("SMS send failed:", err);
       }
@@ -1882,6 +1896,93 @@ export class LoansService {
       };
     } catch (error) {
       console.error("SMS send failed:", error);
+      return {
+        status: "FAILED",
+        recipient: loan.customer.phone,
+        message,
+      };
+    }
+  }
+
+  private async smsSettlementAlert(
+    loan: any,
+    record: any,
+    settlementType: "early" | "final",
+  ): Promise<{ status: string; recipient: string; message: string }> {
+    const amount = Number(record.amount).toLocaleString("en-LK", {
+      minimumFractionDigits: 2,
+    });
+
+    const message =
+      settlementType === "early"
+        ? `Dear ${loan.customer.fullName}, your loan ${loan.loanNumber} has been EARLY SETTLED with a final payment of LKR ${amount}. All obligations are cleared. Thank you, SMV Holdings.`
+        : `Dear ${loan.customer.fullName}, your loan ${loan.loanNumber} has been FULLY SETTLED with a final payment of LKR ${amount}. All obligations are cleared. Thank you, SMV Holdings.`;
+
+    try {
+      const result = await this.sms.send({
+        recipient: loan.customer.phone,
+        message,
+        loanId: loan.id,
+        customerName: loan.customer.fullName,
+        amount: Number(record.amount),
+      });
+
+      return {
+        status: (result as any)?.status ?? "SENT",
+        recipient: loan.customer.phone,
+        message,
+      };
+    } catch (error) {
+      console.error("Settlement SMS send failed:", error);
+      return {
+        status: "FAILED",
+        recipient: loan.customer.phone,
+        message,
+      };
+    }
+  }
+
+  private async smsDisbursementAlert(
+    loan: any,
+    disbursedAmount: number,
+  ): Promise<{ status: string; recipient: string; message: string }> {
+    const amountFormatted = disbursedAmount.toLocaleString("en-LK", {
+      minimumFractionDigits: 2,
+    });
+
+    const nextDue = loan.installments
+      ?.filter((i: any) => i.status !== "Paid" && Number(i.remainingAmount) > 0)
+      .sort(
+        (a: any, b: any) =>
+          new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime(),
+      )[0];
+
+    const firstDueLine = nextDue
+      ? ` First installment of LKR ${Number(
+          nextDue.remainingAmount,
+        ).toLocaleString("en-LK", {
+          minimumFractionDigits: 2,
+        })} is due on ${nextDue.dueDate.toISOString().slice(0, 10)}.`
+      : "";
+
+    const message = `Dear ${loan.customer.fullName}, your loan ${loan.loanNumber} has been disbursed. Net amount credited: LKR ${amountFormatted}.${firstDueLine} Thank you, SMV Holdings.`;
+
+    try {
+      const result = await this.sms.send({
+        recipient: loan.customer.phone,
+        message,
+        loanId: loan.id,
+        customerName: loan.customer.fullName,
+        amount: disbursedAmount,
+      });
+
+      return {
+        status: (result as any)?.status ?? "SENT",
+        recipient: loan.customer.phone,
+        message,
+      };
+    } catch (error) {
+      console.error("Disbursement SMS send failed:", error);
       return {
         status: "FAILED",
         recipient: loan.customer.phone,
