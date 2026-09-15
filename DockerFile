@@ -24,7 +24,6 @@ RUN npm run build
 # Prune devDependencies to slim the runtime image
 RUN npm prune --omit=dev
 
-
 # =============================================================================
 # Stage 2 — Runner
 # Minimal runtime image — only prod deps + compiled JS + prisma artefacts.
@@ -43,9 +42,10 @@ ENV PORT=5000
 RUN addgroup --system --gid 1001 nodejs \
     && adduser --system --uid 1001 nestjs
 
-# Copy pruned node_modules, compiled dist, prisma schema/migrations, package.json
+# Copy pruned node_modules, compiled dist, compiled seed, prisma schema/migrations, package.json
 COPY --from=builder --chown=nestjs:nodejs /app/node_modules ./node_modules
 COPY --from=builder --chown=nestjs:nodejs /app/dist ./dist
+COPY --from=builder --chown=nestjs:nodejs /app/dist-seed ./dist-seed
 COPY --from=builder --chown=nestjs:nodejs /app/prisma ./prisma
 COPY --from=builder --chown=nestjs:nodejs /app/package*.json ./
 

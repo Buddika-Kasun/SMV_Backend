@@ -1,5 +1,6 @@
 node_modules
 dist
+dist-seed
 .git
 .gitignore
 .env
@@ -13,3 +14,9 @@ coverage
 README.md
 Dockerfile
 .dockerignore
+
+# Stray backup files
+**/*.copy.ts
+**/*.copy.txt
+**/* copy.ts
+**/* copy.txt
