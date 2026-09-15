@@ -4,7 +4,7 @@
   "description": "SMV Holdings Microfinance & Fund Management Platform - Backend API (NestJS + PostgreSQL + Prisma)",
   "main": "dist/main",
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.json && tsc -p tsconfig.seed.json",
     "start": "node dist/main",
     "start:dev": "node -r ts-node/register src/main.ts",
     "start:watch": "nodemon",
