@@ -10,6 +10,7 @@ import { ReportsModule } from './modules/reports/reports.module';
 import { PaginationModule } from './common/pagination.module';
 import { CustomersModule } from './modules/customer/customers.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
+import { HealthController } from './modules/health/health.controller';
 
 @Module({
   imports: [
@@ -25,5 +26,6 @@ import { DashboardModule } from './modules/dashboard/dashboard.module';
     ReportsModule,
     DashboardModule,
   ],
+  controllers: [ HealthController, ]
 })
 export class AppModule {}
