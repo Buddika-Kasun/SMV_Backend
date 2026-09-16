@@ -1758,6 +1758,9 @@ export class LoansService {
           installmentNumbersCovered: p.installmentNumbersCovered || [],
         })) || [],
 
+      // Documents
+      documents: loan.documents,
+
       // Early Settlement Quote
       earlySettlementQuote: loan.earlySettlementQuote || undefined,
 

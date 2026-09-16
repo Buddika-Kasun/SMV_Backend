@@ -45,14 +45,14 @@ export class ReportsService {
         case 'Overdue':
           counts.overdue += 1;
           break;
-        case 'Pending Approval':
+        case 'Pending_Approval':
           counts.pendingApproval += 1;
           break;
-        case 'KYC Pending':
+        case 'KYC_Pending':
           counts.pendingKyc += 1;
           break;
         case 'Settled':
-        case 'Early Settled':
+        case 'Early_Settled':
           counts.settled += 1;
           break;
       }
