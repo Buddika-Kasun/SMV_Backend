@@ -1277,7 +1277,23 @@ export class LoansService {
       Number(loan.outstandingBalance) - amount,
     );
     const isFullySettled = newOutstanding <= 0;
-    const nextStatus = isFullySettled ? "Settled" : loan.status;
+    // Determine post-payment status
+    const hasRemainingOverdue = installmentsForAlloc.some(
+      (inst) =>
+        inst.status !== "Paid" &&
+        inst.remainingAmount > 0 &&
+        new Date(inst.dueDate).getTime() < new Date(refDate).getTime(),
+    );
+
+    let nextStatus: string;
+    if (isFullySettled) {
+      nextStatus = "Settled";
+    } else if (hasRemainingOverdue) {
+      nextStatus = "Overdue";
+    } else {
+      // No overdue installments left — but only downgrade if it was Overdue
+      nextStatus = loan.status === "Overdue" ? "Active" : loan.status;
+    }
 
     // ---------- Run everything in a transaction ----------
     let createdPaymentId = "";
@@ -1757,6 +1773,9 @@ export class LoansService {
           allocatedLateFee: Number(p.allocatedLateFee) || 0,
           installmentNumbersCovered: p.installmentNumbersCovered || [],
         })) || [],
+
+      // Documents
+      documents: loan.documents,
 
       // Early Settlement Quote
       earlySettlementQuote: loan.earlySettlementQuote || undefined,

@@ -45,6 +45,7 @@ import {
 } from "./dto/loan-transition.dto";
 import { PresignDocumentDto, AttachDocumentDto } from "./dto/loan-document.dto";
 import { KYCPayload } from "../../shared/types";
+import { OverdueService } from "./overdue.service";
 
 /**
  * Loan lifecycle endpoints. All routes require a valid JWT; disbursement,
@@ -58,8 +59,19 @@ import { KYCPayload } from "../../shared/types";
 export class LoansController {
   constructor(
     private readonly loansService: LoansService,
+    private readonly overdueService: OverdueService,
     private readonly paginationService: PaginationService,
   ) {}
+
+  // ------------
+  @Post("admin/run-overdue-check")
+  @Roles("admin", "manager")
+  @ApiOperation({
+    summary: "Manually trigger overdue detection and SMS dispatch",
+  })
+  async runOverdueCheck() {
+    return ok(await this.overdueService.runNow(), "Overdue check completed");
+  }
 
   // ---------------------------------------------------------------------------
   // List (paginated)
@@ -105,6 +117,44 @@ export class LoansController {
       result.meta.page,
       result.meta.limit,
       "Loans retrieved successfully",
+    );
+  }
+
+  @Get("payment")
+  @ApiQuery({ name: "page", required: false, type: Number, example: 1 })
+  @ApiQuery({ name: "limit", required: false, type: Number, example: 10 })
+  @ApiQuery({ name: "search", required: false, type: String, example: "Silva" })
+  @ApiQuery({
+    name: "status",
+    required: false,
+    enum: ["Active", "Overdue", "Settled", "Early_Settled"],
+    description:
+      "Optional loan-status filter. Pre-disbursement statuses are excluded by default.",
+  })
+  @ApiQuery({
+    name: "sortBy",
+    required: false,
+    type: String,
+    example: "createdAt",
+  })
+  @ApiQuery({ name: "sortOrder", required: false, enum: ["asc", "desc"] })
+  @ApiOperation({
+    summary: "List loans that accept payments",
+    description:
+      "Only returns disbursed loans (Active / Overdue / Settled / Early_Settled). Pre-disbursement and rejected loans are excluded.",
+  })
+  @ApiOkResponse({ description: "Returns paginated list of payable loans" })
+  @ApiUnauthorizedResponse({
+    description: "Missing, invalid or expired bearer token.",
+  })
+  async listPayment(@Query() query: PaginationDto) {
+    const result = await this.loansService.listPayment(query);
+    return this.paginationService.createSuccessResponse(
+      result.items,
+      result.meta.totalItems,
+      result.meta.page,
+      result.meta.limit,
+      "Payment-eligible loans retrieved successfully",
     );
   }
 

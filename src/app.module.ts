@@ -11,9 +11,11 @@ import { PaginationModule } from './common/pagination.module';
 import { CustomersModule } from './modules/customer/customers.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { HealthController } from './modules/health/health.controller';
+import { ScheduleModule } from '@nestjs/schedule';
 
 @Module({
   imports: [
+    ScheduleModule.forRoot(),
     PaginationModule,
     PrismaModule,
     SecurityModule,
@@ -26,6 +28,6 @@ import { HealthController } from './modules/health/health.controller';
     ReportsModule,
     DashboardModule,
   ],
-  controllers: [ HealthController, ]
+  controllers: [HealthController],
 })
 export class AppModule {}
