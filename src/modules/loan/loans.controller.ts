@@ -202,6 +202,29 @@ export class LoansController {
   }
 
   // ---------------------------------------------------------------------------
+  // State counts
+  // ---------------------------------------------------------------------------
+  @Get("state-counts")
+  @ApiOperation({
+    summary: "Get loan counts grouped by status",
+    description:
+      "Returns a breakdown of loan counts by status plus a total. Useful for nav badges and dashboard widgets.",
+  })
+  @ApiOkResponse({
+    description:
+      "`data` contains `{ total, Pending_Approval, KYC_Pending, ... }`.",
+  })
+  @ApiUnauthorizedResponse({
+    description: "Missing, invalid or expired bearer token.",
+  })
+  async getStateCounts() {
+    return ok(
+      await this.loansService.getStateCounts(),
+      "Loan state counts retrieved",
+    );
+  }
+
+  // ---------------------------------------------------------------------------
   // Get single loan
   // ---------------------------------------------------------------------------
   @Get(":id")

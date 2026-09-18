@@ -40,6 +40,10 @@ export type LoanStatus =
   | "Early_Settled"
   | "Rejected";
 
+export type LoanStateCounts = {
+  total: number;
+} & Record<LoanStatus, number>;
+
 export type InstallmentStatus =
   | "Paid"
   | "Pending"

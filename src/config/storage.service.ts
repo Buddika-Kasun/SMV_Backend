@@ -1,13 +1,13 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger } from "@nestjs/common";
 import {
   DeleteObjectCommand,
   GetObjectCommand,
   HeadObjectCommand,
   PutObjectCommand,
   S3Client,
-} from '@aws-sdk/client-s3';
-import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
-import { config } from './env';
+} from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+import { config } from "./env";
 
 /**
  * S3-compatible object storage (Cloudflare R2 / MinIO / AWS S3).
@@ -27,8 +27,11 @@ export class StorageService {
   private readonly configured: boolean;
 
   constructor() {
-    const { bucketName, accessKeyId, secretAccessKey, endpoint, region } = config.storage;
-    this.configured = Boolean(bucketName && accessKeyId && secretAccessKey && endpoint);
+    const { bucketName, accessKeyId, secretAccessKey, endpoint, region } =
+      config.storage;
+    this.configured = Boolean(
+      bucketName && accessKeyId && secretAccessKey && endpoint,
+    );
 
     this.bucket = bucketName;
 
@@ -42,12 +45,14 @@ export class StorageService {
           secretAccessKey,
         },
       });
-      this.logger.log(`Storage configured for bucket "${bucketName}" @ ${endpoint}`);
+      this.logger.log(
+        `Storage configured for bucket "${bucketName}" @ ${endpoint}`,
+      );
     } else {
       // Dummy client - calls throw a clear error when storage is misconfigured.
       this.client = new S3Client({ region });
       this.logger.warn(
-        'Object storage NOT configured (STORAGE_* env vars missing). Upload endpoints will fail with a clear error.',
+        "Object storage NOT configured (STORAGE_* env vars missing). Upload endpoints will fail with a clear error.",
       );
     }
   }
@@ -59,12 +64,16 @@ export class StorageService {
   /** Build a namespaced object key from a business prefix and original file name. */
   buildKey(prefix: string, fileName: string): string {
     const stamp = Date.now();
-    const safe = fileName.replace(/[^a-zA-Z0-9._-]/g, '_').slice(-80) || 'file';
+    const safe = fileName.replace(/[^a-zA-Z0-9._-]/g, "_").slice(-80) || "file";
     return `${prefix}/${stamp}-${safe}`;
   }
 
   /** Short-lived URL for uploading an object (expires default 15 min). */
-  async presignPut(key: string, contentType = 'application/octet-stream', expiresIn?: number): Promise<string> {
+  async presignPut(
+    key: string,
+    contentType = "application/octet-stream",
+    expiresIn?: number,
+  ): Promise<string> {
     this.assertConfigured();
     const command = new PutObjectCommand({
       Bucket: this.bucket,
@@ -85,11 +94,39 @@ export class StorageService {
     });
   }
 
+  async presignDownload(
+    key: string,
+    fileName?: string,
+    expiresIn?: number,
+  ): Promise<string> {
+    this.assertConfigured();
+
+    // Sanitize the filename so it can't break the header
+    const safeName = (fileName || key.split("/").pop() || "download")
+      .replace(/"/g, "")
+      .replace(/[\r\n]/g, "");
+
+    const contentType = this.contentTypeFromName(safeName);
+
+    const command = new GetObjectCommand({
+      Bucket: this.bucket,
+      Key: key,
+      ResponseContentDisposition: `attachment; filename="${safeName}"`,
+      ...(contentType && { ResponseContentType: contentType }),
+    });
+
+    return getSignedUrl(this.client, command, {
+      expiresIn: expiresIn ?? config.storage.presignDurationSeconds,
+    });
+  }
+
   /** Whether an object already exists in the bucket. */
   async exists(key: string): Promise<boolean> {
     this.assertConfigured();
     try {
-      await this.client.send(new HeadObjectCommand({ Bucket: this.bucket, Key: key }));
+      await this.client.send(
+        new HeadObjectCommand({ Bucket: this.bucket, Key: key }),
+      );
       return true;
     } catch {
       return false;
@@ -99,14 +136,37 @@ export class StorageService {
   /** Permanently remove an object. */
   async remove(key: string): Promise<void> {
     this.assertConfigured();
-    await this.client.send(new DeleteObjectCommand({ Bucket: this.bucket, Key: key }));
+    await this.client.send(
+      new DeleteObjectCommand({ Bucket: this.bucket, Key: key }),
+    );
   }
 
   private assertConfigured(): void {
     if (!this.configured) {
       throw new Error(
-        'Object storage is not configured. Set STORAGE_BUCKET_NAME, STORAGE_ACCESS_KEY, STORAGE_SECRET_KEY and STORAGE_ENDPOINT.',
+        "Object storage is not configured. Set STORAGE_BUCKET_NAME, STORAGE_ACCESS_KEY, STORAGE_SECRET_KEY and STORAGE_ENDPOINT.",
       );
     }
+  }
+
+  contentTypeFromName(fileName: string): string {
+    const ext = fileName.split(".").pop()?.toLowerCase() ?? "";
+    const map: Record<string, string> = {
+      pdf: "application/pdf",
+      jpg: "image/jpeg",
+      jpeg: "image/jpeg",
+      png: "image/png",
+      gif: "image/gif",
+      webp: "image/webp",
+      bmp: "image/bmp",
+      svg: "image/svg+xml",
+      doc: "application/msword",
+      docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      xls: "application/vnd.ms-excel",
+      xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      txt: "text/plain",
+      csv: "text/csv",
+    };
+    return map[ext] || "application/octet-stream";
   }
 }
