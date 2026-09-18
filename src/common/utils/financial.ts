@@ -118,7 +118,8 @@ function reducingBalanceSchedule(
   const result: Installment[] = [];
 
   for (let idx = 1; idx <= n; idx++) {
-    dueDate = idx === 1 ? start : stepDueDate(dueDate, freq);
+    // dueDate = idx === 1 ? start : stepDueDate(dueDate, freq);
+    dueDate = stepDueDate(dueDate, freq);
     const interestAmount = roundTo(outstanding * r);
     let principalPart = idx === n ? roundTo(outstanding) : roundTo(emi - interestAmount);
     if (principalPart < 0) principalPart = 0;
@@ -161,7 +162,8 @@ function flatRateSchedule(
   let dueDate = start;
 
   for (let idx = 1; idx <= n; idx++) {
-    dueDate = idx === 1 ? start : stepDueDate(dueDate, freq);
+    // dueDate = idx === 1 ? start : stepDueDate(dueDate, freq);
+    dueDate = stepDueDate(dueDate, freq);
     const isLast = idx === n;
     const p = isLast ? roundTo(principal - principalPer * (n - 1)) : principalPer;
     const i = isLast ? roundTo(totalInterest - interestPer * (n - 1)) : interestPer;

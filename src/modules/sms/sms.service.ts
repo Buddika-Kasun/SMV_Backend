@@ -7,6 +7,12 @@ import { smsRecipient } from "../../common/utils/phone";
 import { nowISO } from "../../common/utils/dates";
 import { SendSmsDto } from "./dto/send-sms.dto";
 
+interface SmsBalance {
+  remainingBalance: number;
+  expiredOn: string | null;
+  raw: unknown;
+}
+
 /**
  * Text.lk SMS gateway integration.
  *
@@ -31,6 +37,19 @@ export class SmsService {
 
   constructor(private readonly prisma: PrismaService) {}
 
+  private get baseUrl(): string {
+    // Trim any trailing slash so we don't double up when concatenating
+    return (config.sms.url ?? "").replace(/\/+$/, "");
+  }
+
+  private get sendUrl(): string {
+    return `${this.baseUrl}/sms/send`;
+  }
+
+  private get balanceUrl(): string {
+    return `${this.baseUrl}/balance`;
+  }
+
   async send(input: SendSmsDto): Promise<SMSLogEntry> {
     const recipient = smsRecipient(input.recipient);
     const message = input.message;
@@ -48,9 +67,9 @@ export class SmsService {
       gatewayResponse: undefined,
     };
 
-    if (config.sms.apiKey && config.sms.url) {
+    if (config.sms.apiKey && this.sendUrl) {
       try {
-        const resp = await fetch(config.sms.url, {
+        const resp = await fetch(this.sendUrl, {
           method: "POST",
           headers: {
             Authorization: `Bearer ${config.sms.apiKey}`,
@@ -121,5 +140,75 @@ export class SmsService {
       take: Math.min(limit, 500),
     });
     return rows.map((r: any) => ({ ...(r.data as unknown as SMSLogEntry) }));
+  }
+
+  // ---------------------------------------------------------------------------
+  // Balance
+  // ---------------------------------------------------------------------------
+  /**
+   * GET {baseUrl}/balance
+   *
+   * Response:
+   * {
+   *   "status": "success",
+   *   "message": null,
+   *   "data": {
+   *     "remaining_balance": "100",
+   *     "expired_on": "15th Sep 26, 2:50 PM"
+   *   }
+   * }
+   */
+  async getBalance(): Promise<SmsBalance> {
+    if (!config.sms.apiKey) {
+      this.logger.warn(
+        "SMS balance requested but TEXT_LK_API_KEY is not configured.",
+      );
+      return { remainingBalance: 0, expiredOn: null, raw: null };
+    }
+
+    if (!this.baseUrl) {
+      throw new Error("TEXT_LK_URL is not configured.");
+    }
+
+    try {
+      const resp = await fetch(this.balanceUrl, {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${config.sms.apiKey}`,
+          Accept: "application/json",
+        },
+      });
+
+      const text = await resp.text();
+
+      let parsed: any = undefined;
+      try {
+        parsed = JSON.parse(text);
+      } catch {
+        throw new Error(
+          `Non-JSON response from balance endpoint: ${text.slice(0, 200)}`,
+        );
+      }
+
+      if (!resp.ok || parsed.status !== "success") {
+        throw new Error(
+          parsed?.message ?? `HTTP ${resp.status}: ${text.slice(0, 200)}`,
+        );
+      }
+
+      const data = parsed.data ?? {};
+      return {
+        remainingBalance: Number(data.remaining_balance ?? 0),
+        expiredOn: data.expired_on ?? null,
+        raw: parsed,
+      };
+    } catch (err) {
+      this.logger.error(
+        `Failed to fetch SMS balance: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
+      throw err;
+    }
   }
 }
