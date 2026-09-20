@@ -274,6 +274,7 @@ export class LoansController {
   // Approve / Reject
   // ---------------------------------------------------------------------------
   @Post(":id/approve")
+  @Roles("admin", "manager")
   @ApiParam({
     name: "id",
     description: "ID of the loan application to approve",
@@ -306,6 +307,7 @@ export class LoansController {
   }
 
   @Post(":id/reject")
+  @Roles("admin", "manager")
   @ApiParam({ name: "id", description: "ID of the loan application to reject" })
   @ApiOperation({
     summary: "Reject a loan application",
@@ -372,7 +374,7 @@ export class LoansController {
   // Disburse
   // ---------------------------------------------------------------------------
   @Post(":id/disburse")
-  @Roles("admin", "manager")
+  // @Roles("admin", "manager")
   @ApiParam({ name: "id", description: "ID of the approved loan to disburse" })
   @ApiOperation({
     summary: "Disburse an approved loan",
@@ -436,7 +438,7 @@ export class LoansController {
   // Early settlement
   // ---------------------------------------------------------------------------
   @Post(":id/early-settle")
-  @Roles("admin", "manager")
+  // @Roles("admin", "manager")
   @ApiParam({ name: "id", description: "ID of the loan to settle early" })
   @ApiOperation({
     summary: "Settle a loan early",
