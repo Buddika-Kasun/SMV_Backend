@@ -236,7 +236,18 @@ export class LoansService {
       throw new NotFoundException("No loans found with this status");
     }
 
-    return rows.map((row) => ({
+    // Sort by the order of `statuses` array, then by createdAt desc within each group
+    const statusOrder = new Map(statuses.map((s, i) => [s, i]));
+
+    const sorted = [...rows].sort((a, b) => {
+      const ai = statusOrder.get(a.status) ?? Number.MAX_SAFE_INTEGER;
+      const bi = statusOrder.get(b.status) ?? Number.MAX_SAFE_INTEGER;
+      if (ai !== bi) return ai - bi;
+      // Same status — keep createdAt desc (already fetched that way, but be explicit)
+      return b.createdAt.getTime() - a.createdAt.getTime();
+    });
+
+    return sorted.map((row) => ({
       id: row.id,
       loanNumber: row.loanNumber,
       accountNumber: row.accountNumber || row.account?.accountNumber,
@@ -1785,33 +1796,30 @@ export class LoansService {
     }
 
     // ---------------------------------------------------------------
-  // Mint fresh 1-hour download URLs for every document
-  // ---------------------------------------------------------------
-  const documents = await Promise.all(
-    (loan.documents ?? []).map(async (doc: any) => ({
-      id: doc.id,
-      loanId: doc.loanId,
-      documentType: doc.documentType,
-      fileName: doc.fileName,
-      fileKey: doc.fileKey,
-      // Fresh presigned download URL — expires in 30 min
-      fileUrl: await this.storage.presignDownload(
-        doc.fileKey,
-        doc.fileName,
-        1800,
-      ),
-      // Inline preview (opens in browser, expires 30 min)
-      previewUrl: await this.storage.presignGet(
-        doc.fileKey,
-        1800,
-      ),
-      status: doc.status,
-      uploadedAt: doc.uploadedAt,
-      verifiedAt: doc.verifiedAt,
-      verifiedBy: doc.verifiedBy,
-      notes: doc.notes,
-    })),
-  );
+    // Mint fresh 1-hour download URLs for every document
+    // ---------------------------------------------------------------
+    const documents = await Promise.all(
+      (loan.documents ?? []).map(async (doc: any) => ({
+        id: doc.id,
+        loanId: doc.loanId,
+        documentType: doc.documentType,
+        fileName: doc.fileName,
+        fileKey: doc.fileKey,
+        // Fresh presigned download URL — expires in 30 min
+        fileUrl: await this.storage.presignDownload(
+          doc.fileKey,
+          doc.fileName,
+          1800,
+        ),
+        // Inline preview (opens in browser, expires 30 min)
+        previewUrl: await this.storage.presignGet(doc.fileKey, 1800),
+        status: doc.status,
+        uploadedAt: doc.uploadedAt,
+        verifiedAt: doc.verifiedAt,
+        verifiedBy: doc.verifiedBy,
+        notes: doc.notes,
+      })),
+    );
 
     return {
       // Identity
