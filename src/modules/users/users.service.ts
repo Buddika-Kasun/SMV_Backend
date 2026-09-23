@@ -15,6 +15,7 @@ import { CreateUserDto } from "./dto/create-user.dto";
 import { UpdateUserDto } from "./dto/update-user.dto";
 import { PaginationDto } from "../../common/dto/pagination.dto";
 import { PaginationService } from "../../common/services/pagination.service";
+import { EventBusService } from "../event/event-bus.service";
 
 const SALT_ROUNDS = 10;
 
@@ -23,6 +24,7 @@ export class UsersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly paginationService: PaginationService,
+    private readonly eventBus: EventBusService,
   ) {}
 
   async findAll(paginationDto: PaginationDto) {
@@ -105,6 +107,12 @@ export class UsersService {
           phone: input.phone ?? null,
         },
       });
+
+      await this.eventBus.publish({
+        type: "users.changed",
+        payload: {},
+      });
+
       return this.toPublicUser(row);
     } catch (error) {
       if (
@@ -147,6 +155,12 @@ export class UsersService {
       }
 
       const updated = await this.prisma.user.update({ where: { id }, data });
+      
+      await this.eventBus.publish({
+        type: "users.changed",
+        payload: {},
+      });
+
       return this.toPublicUser(updated);
     } catch (error) {
       if (
@@ -178,6 +192,12 @@ export class UsersService {
           );
         }
       }
+
+      await this.eventBus.publish({
+        type: "users.changed",
+        payload: {},
+      });
+
       await this.prisma.user.delete({ where: { id } });
     } catch (error) {
       if (
@@ -229,6 +249,11 @@ export class UsersService {
         });
         createdUsers.push(result);
       }
+
+      await this.eventBus.publish({
+        type: "users.changed",
+        payload: {},
+      });
 
       return createdUsers.map(this.toPublicUser);
     } catch (error) {

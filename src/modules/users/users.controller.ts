@@ -150,7 +150,7 @@ export class UsersController {
   }
 
   @Delete(":id")
-  @Roles("admin")
+  @Roles("admin", "manager")
   @HttpCode(HttpStatus.OK)
   @ApiParam({
     name: "id",
