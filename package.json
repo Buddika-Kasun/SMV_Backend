@@ -4,7 +4,7 @@
   "description": "SMV Holdings Microfinance & Fund Management Platform - Backend API (NestJS + PostgreSQL + Prisma)",
   "main": "dist/main",
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.json && tsc -p tsconfig.seed.json",
     "start": "node dist/main",
     "start:dev": "node -r ts-node/register src/main.ts",
     "start:watch": "nodemon",
@@ -13,7 +13,12 @@
     "prisma:migrate": "prisma migrate dev",
     "prisma:push": "prisma db push",
     "prisma:studio": "prisma studio",
-    "seed": "node -r ts-node/register prisma/seed.ts"
+    "seed:Dev": "node -r ts-node/register prisma/seed.ts",
+    "seed": "node dist-seed/prisma/seed.js",
+    "seed:dev": "ts-node prisma/seed.ts"
+  },
+  "prisma": {
+    "seed": "node dist-seed/prisma/seed.js"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1116.0",
@@ -22,12 +27,14 @@
     "@nestjs/core": "^11.0.0",
     "@nestjs/jwt": "^11.0.0",
     "@nestjs/platform-express": "^11.0.0",
+    "@nestjs/schedule": "^12.0.2",
     "@nestjs/swagger": "^11.4.7",
     "@prisma/client": "^6.2.1",
     "bcryptjs": "^2.4.3",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.1",
     "dotenv": "^16.0.0",
+    "ioredis": "^6.0.0",
     "reflect-metadata": "^0.2.2",
     "swagger-ui-express": "^5.0.1"
   },

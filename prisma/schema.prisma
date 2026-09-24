@@ -28,6 +28,7 @@ model User {
   approvedLoans Loan[]    @relation("ApprovedBy")
   disbursedLoans Loan[]   @relation("DisbursedBy")
   payments      Payment[] @relation("ReceivedBy")
+  notifications Notification[] 
 
   @@map("users")
 }
@@ -258,4 +259,25 @@ model ConsultancyAgreement {
   createdAt        DateTime  @default(now()) @map("created_at")
 
   @@map("consultancy_agreements")
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  type      String
+  title     String
+  body      String
+  data      Json?
+  read      Boolean  @default(false)
+  readAt    DateTime? @map("read_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  /** Prevents duplicate notifications when multiple backend instances
+   *  react to the same event. Format: "<eventType>:<sourceId>" */
+  dedupeKey String?  @unique @map("dedupe_key")
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, read, createdAt])
+  @@map("notifications")
 }

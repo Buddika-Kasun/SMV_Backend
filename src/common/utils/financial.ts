@@ -85,7 +85,7 @@ export function generateSchedule(params: GenerateScheduleParams): GenerateSchedu
   const principal = roundTo(params.principal);
 
   const schedule =
-    params.method === 'Reducing Balance'
+    params.method === 'Reducing_Balance'
       ? reducingBalanceSchedule(principal, params.annualRatePct, periodsPerYear, n, start, params.frequency)
       : flatRateSchedule(principal, params.annualRatePct, params.termMonths, n, start, params.frequency);
 
@@ -98,7 +98,7 @@ export function generateSchedule(params: GenerateScheduleParams): GenerateSchedu
 // ---------------------------------------------------------------------------
 
 function statusForPending(dueDate: string, today: string, paidCredit: number): InstallmentStatus {
-  if (paidCredit > 0) return 'Partially Paid';
+  if (paidCredit > 0) return 'Partially_Paid';
   return isBefore(dueDate, today) ? 'Overdue' : 'Pending';
 }
 
@@ -118,7 +118,8 @@ function reducingBalanceSchedule(
   const result: Installment[] = [];
 
   for (let idx = 1; idx <= n; idx++) {
-    dueDate = idx === 1 ? start : stepDueDate(dueDate, freq);
+    // dueDate = idx === 1 ? start : stepDueDate(dueDate, freq);
+    dueDate = stepDueDate(dueDate, freq);
     const interestAmount = roundTo(outstanding * r);
     let principalPart = idx === n ? roundTo(outstanding) : roundTo(emi - interestAmount);
     if (principalPart < 0) principalPart = 0;
@@ -161,7 +162,8 @@ function flatRateSchedule(
   let dueDate = start;
 
   for (let idx = 1; idx <= n; idx++) {
-    dueDate = idx === 1 ? start : stepDueDate(dueDate, freq);
+    // dueDate = idx === 1 ? start : stepDueDate(dueDate, freq);
+    dueDate = stepDueDate(dueDate, freq);
     const isLast = idx === n;
     const p = isLast ? roundTo(principal - principalPer * (n - 1)) : principalPer;
     const i = isLast ? roundTo(totalInterest - interestPer * (n - 1)) : interestPer;
@@ -206,7 +208,7 @@ export function computeLoan(loan: Loan, referenceDate?: string): Loan {
       inst.status = 'Paid';
       inst.paidDate = inst.paidDate ?? today;
     } else if (creditPaid > 0) {
-      inst.status = 'Partially Paid';
+      inst.status = 'Partially_Paid';
     } else if (isBefore(inst.dueDate, today)) {
       inst.status = 'Overdue';
       anyDisbursedOverdue = anyDisbursedOverdue || inst.paidAmount === 0;
@@ -236,7 +238,7 @@ export function computeLoan(loan: Loan, referenceDate?: string): Loan {
     // pre-disbursement statuses are driven by explicit transitions.
     loan.status = loan.status as Loan['status'];
   } else if (outstandingBalance <= 0) {
-    loan.status = loan.earlySettlementQuote ? 'Early Settled' : 'Settled';
+    loan.status = loan.earlySettlementQuote ? 'Early_Settled' : 'Settled';
     loan.settledDate = loan.settledDate ?? today;
   } else if (anyDisbursedOverdue) {
     loan.status = 'Overdue';
@@ -326,7 +328,7 @@ export function allocatePayment(loan: any, amount: number, referenceDate?: strin
       inst.status = 'Paid';
       inst.paidDate = inst.paidDate ?? today;
     } else if (creditPaid > 0) {
-      inst.status = 'Partially Paid';
+      inst.status = 'Partially_Paid';
     }
 
     result.applied = roundTo(

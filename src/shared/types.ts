@@ -4,11 +4,11 @@
 // ============================================================
 
 export type LoanType =
-  | "Instant Personal"
-  | "Standard Personal"
-  | "Business Expansion"
-  | "Micro Enterprise"
-  | "Emergency Quick";
+  | "Instant_Personal"
+  | "Standard_Personal"
+  | "Business_Expansion"
+  | "Micro_Enterprise"
+  | "Emergency_Quick";
 
 export type UserRole = "admin" | "manager" | "staff";
 
@@ -28,32 +28,36 @@ export interface User {
 
 export type RepaymentFrequency = "Monthly" | "Bi-Weekly" | "Weekly";
 
-export type InterestMethod = "Flat Rate" | "Reducing Balance";
+export type InterestMethod = "Flat_Rate" | "Reducing_Balance";
 
 export type LoanStatus =
-  | "Pending Approval"
-  | "KYC Pending"
-  | "Approved - Pending Disbursement"
+  | "Pending_Approval"
+  | "KYC_Pending"
+  | "Approved_Pending_Disbursement"
   | "Active"
   | "Overdue"
   | "Settled"
-  | "Early Settled"
+  | "Early_Settled"
   | "Rejected";
+
+export type LoanStateCounts = {
+  total: number;
+} & Record<LoanStatus, number>;
 
 export type InstallmentStatus =
   | "Paid"
   | "Pending"
   | "Overdue"
-  | "Partially Paid";
+  | "Partially_Paid";
 
 export type KYCDocumentType =
-  | "National ID / Passport"
-  | "Proof of Address"
-  | "Pay Slip / Bank Statement"
-  | "Guarantor ID"
-  | "Business Registration";
+  | "National_ID_Passport"
+  | "Proof_of_Address"
+  | "Pay_Slip_Bank_Statement"
+  | "Guarantor_ID"
+  | "Business_Registration";
 
-export type KYCDocumentStatus = "Verified" | "Pending Review" | "Rejected";
+export type KYCDocumentStatus = "Verified" | "Pending_Review" | "Rejected";
 
 export interface KYCDocument {
   id: string;
@@ -68,7 +72,7 @@ export interface KYCDocument {
 
 export interface KYCData {
   nationalIdNumber: string;
-  idType: "NIC" | "Passport" | "Driver License";
+  idType: "NIC" | "Passport" | "Driver_License";
   dateOfBirth: string;
   gender: string;
   occupation: string;

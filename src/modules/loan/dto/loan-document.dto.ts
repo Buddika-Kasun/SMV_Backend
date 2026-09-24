@@ -3,11 +3,11 @@ import { ApiProperty } from "@nestjs/swagger";
 import { KYCDocumentType } from "../../../shared/types";
 
 const KYC_DOCUMENT_TYPES: KYCDocumentType[] = [
-  "National ID / Passport",
-  "Proof of Address",
-  "Pay Slip / Bank Statement",
-  "Guarantor ID",
-  "Business Registration",
+  "National_ID_Passport",
+  "Proof_of_Address",
+  "Pay_Slip_Bank_Statement",
+  "Guarantor_ID",
+  "Business_Registration",
 ];
 
 /** Step 1 - ask the server for a presigned PUT URL. */

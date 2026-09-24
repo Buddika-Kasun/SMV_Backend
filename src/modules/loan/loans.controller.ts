@@ -45,6 +45,7 @@ import {
 } from "./dto/loan-transition.dto";
 import { PresignDocumentDto, AttachDocumentDto } from "./dto/loan-document.dto";
 import { KYCPayload } from "../../shared/types";
+import { OverdueService } from "./overdue.service";
 
 /**
  * Loan lifecycle endpoints. All routes require a valid JWT; disbursement,
@@ -58,8 +59,19 @@ import { KYCPayload } from "../../shared/types";
 export class LoansController {
   constructor(
     private readonly loansService: LoansService,
+    private readonly overdueService: OverdueService,
     private readonly paginationService: PaginationService,
   ) {}
+
+  // ------------
+  @Post("admin/run-overdue-check")
+  @Roles("admin", "manager")
+  @ApiOperation({
+    summary: "Manually trigger overdue detection and SMS dispatch",
+  })
+  async runOverdueCheck() {
+    return ok(await this.overdueService.runNow(), "Overdue check completed");
+  }
 
   // ---------------------------------------------------------------------------
   // List (paginated)
@@ -108,6 +120,44 @@ export class LoansController {
     );
   }
 
+  @Get("payment")
+  @ApiQuery({ name: "page", required: false, type: Number, example: 1 })
+  @ApiQuery({ name: "limit", required: false, type: Number, example: 10 })
+  @ApiQuery({ name: "search", required: false, type: String, example: "Silva" })
+  @ApiQuery({
+    name: "status",
+    required: false,
+    enum: ["Active", "Overdue", "Settled", "Early_Settled"],
+    description:
+      "Optional loan-status filter. Pre-disbursement statuses are excluded by default.",
+  })
+  @ApiQuery({
+    name: "sortBy",
+    required: false,
+    type: String,
+    example: "createdAt",
+  })
+  @ApiQuery({ name: "sortOrder", required: false, enum: ["asc", "desc"] })
+  @ApiOperation({
+    summary: "List loans that accept payments",
+    description:
+      "Only returns disbursed loans (Active / Overdue / Settled / Early_Settled). Pre-disbursement and rejected loans are excluded.",
+  })
+  @ApiOkResponse({ description: "Returns paginated list of payable loans" })
+  @ApiUnauthorizedResponse({
+    description: "Missing, invalid or expired bearer token.",
+  })
+  async listPayment(@Query() query: PaginationDto) {
+    const result = await this.loansService.listPayment(query);
+    return this.paginationService.createSuccessResponse(
+      result.items,
+      result.meta.totalItems,
+      result.meta.page,
+      result.meta.limit,
+      "Payment-eligible loans retrieved successfully",
+    );
+  }
+
   // ---------------------------------------------------------------------------
   // List by status (comma-separated, no pagination)
   // NOTE: must be declared BEFORE @Get(":id") so "list" isn't captured as an id
@@ -148,6 +198,29 @@ export class LoansController {
     return ok(
       await this.loansService.getListByStatus(statuses),
       "Loan list retrieved",
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // State counts
+  // ---------------------------------------------------------------------------
+  @Get("state-counts")
+  @ApiOperation({
+    summary: "Get loan counts grouped by status",
+    description:
+      "Returns a breakdown of loan counts by status plus a total. Useful for nav badges and dashboard widgets.",
+  })
+  @ApiOkResponse({
+    description:
+      "`data` contains `{ total, Pending_Approval, KYC_Pending, ... }`.",
+  })
+  @ApiUnauthorizedResponse({
+    description: "Missing, invalid or expired bearer token.",
+  })
+  async getStateCounts() {
+    return ok(
+      await this.loansService.getStateCounts(),
+      "Loan state counts retrieved",
     );
   }
 
@@ -201,6 +274,7 @@ export class LoansController {
   // Approve / Reject
   // ---------------------------------------------------------------------------
   @Post(":id/approve")
+  @Roles("admin", "manager")
   @ApiParam({
     name: "id",
     description: "ID of the loan application to approve",
@@ -233,6 +307,7 @@ export class LoansController {
   }
 
   @Post(":id/reject")
+  @Roles("admin", "manager")
   @ApiParam({ name: "id", description: "ID of the loan application to reject" })
   @ApiOperation({
     summary: "Reject a loan application",
@@ -250,9 +325,13 @@ export class LoansController {
   @ApiUnauthorizedResponse({
     description: "Missing, invalid or expired bearer token.",
   })
-  async reject(@Param("id") id: string, @Body() body: RejectLoanDto) {
+  async reject(
+    @Param("id") id: string,
+    @Body() body: RejectLoanDto,
+    @CurrentUser() auth: AuthedUser,
+  ) {
     return ok(
-      await this.loansService.reject(id, body.reason),
+      await this.loansService.reject(id, body.reason, auth),
       "Loan application rejected",
     );
   }
@@ -299,7 +378,7 @@ export class LoansController {
   // Disburse
   // ---------------------------------------------------------------------------
   @Post(":id/disburse")
-  @Roles("admin", "manager")
+  // @Roles("admin", "manager")
   @ApiParam({ name: "id", description: "ID of the approved loan to disburse" })
   @ApiOperation({
     summary: "Disburse an approved loan",
@@ -363,7 +442,7 @@ export class LoansController {
   // Early settlement
   // ---------------------------------------------------------------------------
   @Post(":id/early-settle")
-  @Roles("admin", "manager")
+  // @Roles("admin", "manager")
   @ApiParam({ name: "id", description: "ID of the loan to settle early" })
   @ApiOperation({
     summary: "Settle a loan early",

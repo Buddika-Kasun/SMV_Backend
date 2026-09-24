@@ -1,9 +1,12 @@
 import { Injectable } from "@nestjs/common";
 import { PrismaService } from "../../config/prisma.service";
+import { SmsService } from "../sms/sms.service";
+import { AuthedUser } from "../../common/guards/auth.types";
 
 interface HeaderStats {
   totalDisbursedAmount: number;
   totalOutstanding: number;
+  smsUnit: number;
 }
 
 interface DashboardLoanRow {
@@ -41,29 +44,60 @@ interface DashboardStats {
 
 @Injectable()
 export class DashboardService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly sms: SmsService,
+  ) {}
 
   // ---------------------------------------------------------------------------
   // Header (lightweight — called frequently)
   // ---------------------------------------------------------------------------
-  async getHeader(): Promise<HeaderStats> {
-    const [disbursedAgg, outstandingAgg] = await Promise.all([
-      this.prisma.loan.aggregate({
-        where: {
-          status: { in: ["Active", "Overdue", "Settled", "Early_Settled"] },
-        },
-        _sum: { disbursedAmount: true },
-      }),
-      this.prisma.loan.aggregate({
-        where: { status: { in: ["Active", "Overdue"] } },
-        _sum: { outstandingBalance: true },
-      }),
+  async getHeader(user: AuthedUser): Promise<HeaderStats> {
+    const canSeeAmounts = user.role === "admin" || user.role === "manager";
+
+    // SMS unit is visible to everyone — fetch in parallel with (optional) aggregates
+    const [smsUnit, disbursedAgg, outstandingAgg] = await Promise.all([
+      this.fetchSmsUnit(),
+      canSeeAmounts
+        ? this.prisma.loan.aggregate({
+            where: {
+              status: {
+                in: ["Active", "Overdue", "Settled", "Early_Settled"],
+              },
+            },
+            _sum: { disbursedAmount: true },
+          })
+        : Promise.resolve({ _sum: { disbursedAmount: 0 } } as any),
+      canSeeAmounts
+        ? this.prisma.loan.aggregate({
+            where: { status: { in: ["Active", "Overdue"] } },
+            _sum: { outstandingBalance: true },
+          })
+        : Promise.resolve({ _sum: { outstandingBalance: 0 } } as any),
     ]);
 
     return {
       totalDisbursedAmount: Number(disbursedAgg._sum.disbursedAmount ?? 0),
       totalOutstanding: Number(outstandingAgg._sum.outstandingBalance ?? 0),
+      smsUnit,
     };
+  }
+
+  // ---------------------------------------------------------------------------
+  // SMS balance — best-effort, never breaks the header
+  // ---------------------------------------------------------------------------
+  private async fetchSmsUnit(): Promise<number> {
+    try {
+      const balance = await this.sms.getBalance();
+      return balance.remainingBalance ?? 0;
+    } catch (err) {
+      // this.logger.warn(
+      //   `Failed to fetch SMS balance: ${
+      //     err instanceof Error ? err.message : String(err)
+      //   }`,
+      // );
+      return 0;
+    }
   }
 
   // ---------------------------------------------------------------------------

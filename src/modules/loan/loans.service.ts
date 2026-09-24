@@ -31,12 +31,14 @@ import {
   InterestMethod,
   KYCPayload,
   Loan,
+  LoanStateCounts,
   LoanType,
   PaymentRecord,
   RepaymentFrequency,
 } from "../../shared/types";
 import { accountNumber, customerId, loanId } from "../../common/utils/id";
 import { Prisma } from "@prisma/client";
+import { EventBusService } from "../event/event-bus.service";
 
 @Injectable()
 export class LoansService {
@@ -45,6 +47,7 @@ export class LoansService {
     private readonly storage: StorageService,
     private readonly sms: SmsService,
     private readonly paginationService: PaginationService,
+    private readonly eventBus: EventBusService,
   ) {}
 
   // ---------------------------------------------------------------------------
@@ -213,7 +216,7 @@ export class LoansService {
     });
 
     if (!row) throw new NotFoundException("Loan not found");
-    return this.formatLoanResponse(row);
+    return await this.formatLoanResponse(row);
   }
 
   async getListByStatus(statuses: string[]): Promise<any[]> {
@@ -235,7 +238,18 @@ export class LoansService {
       throw new NotFoundException("No loans found with this status");
     }
 
-    return rows.map((row) => ({
+    // Sort by the order of `statuses` array, then by createdAt desc within each group
+    const statusOrder = new Map(statuses.map((s, i) => [s, i]));
+
+    const sorted = [...rows].sort((a, b) => {
+      const ai = statusOrder.get(a.status) ?? Number.MAX_SAFE_INTEGER;
+      const bi = statusOrder.get(b.status) ?? Number.MAX_SAFE_INTEGER;
+      if (ai !== bi) return ai - bi;
+      // Same status — keep createdAt desc (already fetched that way, but be explicit)
+      return b.createdAt.getTime() - a.createdAt.getTime();
+    });
+
+    return sorted.map((row) => ({
       id: row.id,
       loanNumber: row.loanNumber,
       accountNumber: row.accountNumber || row.account?.accountNumber,
@@ -245,6 +259,40 @@ export class LoansService {
         fullName: row.customer.fullName,
       },
     }));
+  }
+
+  // ---------------------------------------------------------------------------
+  // State counts (for nav badges, dashboard, filter chips)
+  // ---------------------------------------------------------------------------
+  async getStateCounts(): Promise<LoanStateCounts> {
+    const grouped = await this.prisma.loan.groupBy({
+      by: ["status"],
+      _count: { _all: true },
+    });
+
+    // Initialize all statuses to 0 so the client always gets the full shape
+    const counts: LoanStateCounts = {
+      total: 0,
+      Pending_Approval: 0,
+      KYC_Pending: 0,
+      Approved_Pending_Disbursement: 0,
+      Active: 0,
+      Overdue: 0,
+      Settled: 0,
+      Early_Settled: 0,
+      Rejected: 0,
+    };
+
+    for (const row of grouped) {
+      const key = row.status as keyof LoanStateCounts;
+      const n = row._count._all;
+      if (key in counts && key !== "total") {
+        counts[key] = n;
+        counts.total += n;
+      }
+    }
+
+    return counts;
   }
 
   // ---------------------------------------------------------------------------
@@ -436,6 +484,12 @@ export class LoansService {
       return loan.id;
     });
 
+    // Publish after commit
+    await this.eventBus.publish({
+      type: "loans.changed",
+      payload: { action: "created", loanId: loanId_ },
+    });
+
     // 3. Return the fully hydrated loan (outside the transaction is fine)
     return this.getOne(loanId_);
   }
@@ -476,10 +530,15 @@ export class LoansService {
       },
     });
 
-    return this.formatLoanResponse(updated);
+    await this.eventBus.publish({
+      type: "loans.changed",
+      payload: { action: "approved", loanId: id },
+    });
+
+    return await this.formatLoanResponse(updated);
   }
 
-  async reject(id: string, reason: string): Promise<any> {
+  async reject(id: string, reason: string, auth: AuthedUser): Promise<any> {
     const loan = await this.prisma.loan.findUnique({
       where: { id },
       include: { customer: true },
@@ -502,6 +561,7 @@ export class LoansService {
       data: {
         status: "Rejected",
         rejectedAt: new Date(),
+        approvedById: (auth as any).sub || (auth as any).id,
         rejectReason: reason,
       },
       include: {
@@ -512,7 +572,12 @@ export class LoansService {
       },
     });
 
-    return this.formatLoanResponse(updated);
+    await this.eventBus.publish({
+      type: "loans.changed",
+      payload: { action: "rejected", loanId: id },
+    });
+
+    return await this.formatLoanResponse(updated);
   }
 
   // async updateKYC(id: string, dto: KYCPayload, auth: AuthedUser): Promise<any> {
@@ -750,7 +815,12 @@ export class LoansService {
       },
     });
 
-    return this.formatLoanResponse(updated);
+    await this.eventBus.publish({
+      type: "loans.changed",
+      payload: { action: "kyc_updated", loanId: id },
+    });
+
+    return await this.formatLoanResponse(updated);
   }
 
   // async disburse(
@@ -1120,6 +1190,17 @@ export class LoansService {
     const disbursedAmount = requestedAmount - deductedFee;
     const officerId = (auth as any).sub || (auth as any).id;
     const now = new Date();
+    const disbursedDateISO = now.toISOString().slice(0, 10);
+
+    // ---- Regenerate the schedule anchored to the disbursement date ----
+    const schedule = generateSchedule({
+      principal: requestedAmount,
+      annualRatePct: Number(loan.interestRatePerAnnum),
+      termMonths: loan.termMonths,
+      frequency: loan.repaymentFrequency as RepaymentFrequency,
+      method: loan.interestMethod as InterestMethod,
+      startDate: disbursedDateISO, // ← anchor to disbursement
+    });
 
     await this.prisma.$transaction(async (tx) => {
       // ---- Update loan ----
@@ -1134,6 +1215,31 @@ export class LoansService {
           disbursedById: officerId,
         },
       });
+
+      // ---- Rewrite each installment with the new due dates ----
+      // Match by installmentNumber since that's the stable key.
+      for (const newInst of schedule.installments) {
+        const existing = loan.installments.find(
+          (i) => i.installmentNumber === newInst.installmentNumber,
+        );
+        if (!existing) continue;
+
+        // Skip if the installment has already been paid (edge case, shouldn't
+        // happen before disbursement, but safe to guard)
+        if (existing.status === "Paid") continue;
+
+        await tx.installment.update({
+          where: { id: existing.id },
+          data: {
+            dueDate: new Date(newInst.dueDate),
+            principalAmount: newInst.principalAmount,
+            interestAmount: newInst.interestAmount,
+            totalInstallment: newInst.totalInstallment,
+            remainingAmount: newInst.totalInstallment, // reset since not paid
+            // keep paidAmount/lateFee as-is (should be zero at this stage)
+          },
+        });
+      }
 
       // ---- Update / create linked account ----
       if (loan.accountId) {
@@ -1161,6 +1267,17 @@ export class LoansService {
       }
     });
 
+    // ---------- Re-fetch with updated installments ----------
+    const freshLoan = await this.prisma.loan.findUnique({
+      where: { id },
+      include: {
+        customer: true,
+        installments: { orderBy: { installmentNumber: "asc" } },
+        account: true,
+        guarantor: true,
+      },
+    });
+
     // ---------- SMS alert (best-effort, outside tx) ----------
     let smsResult: {
       status: string;
@@ -1168,7 +1285,7 @@ export class LoansService {
       message: string;
     } | null = null;
     try {
-      smsResult = await this.smsDisbursementAlert(loan, disbursedAmount);
+      smsResult = await this.smsDisbursementAlert(freshLoan, disbursedAmount);
     } catch (err) {
       console.error("Disbursement SMS send failed:", err);
     }
@@ -1187,7 +1304,16 @@ export class LoansService {
       },
     });
 
-    return this.formatLoanResponse(updated);
+    await this.eventBus.publish({
+      type: "loans.changed",
+      payload: { action: "disbursed", loanId: id },
+    });
+    await this.eventBus.publish({
+      type: "stats.changed",
+      payload: {},
+    });
+
+    return await this.formatLoanResponse(updated);
   }
 
   async remove(id: string): Promise<void> {
@@ -1277,7 +1403,23 @@ export class LoansService {
       Number(loan.outstandingBalance) - amount,
     );
     const isFullySettled = newOutstanding <= 0;
-    const nextStatus = isFullySettled ? "Settled" : loan.status;
+    // Determine post-payment status
+    const hasRemainingOverdue = installmentsForAlloc.some(
+      (inst) =>
+        inst.status !== "Paid" &&
+        inst.remainingAmount > 0 &&
+        new Date(inst.dueDate).getTime() < new Date(refDate).getTime(),
+    );
+
+    let nextStatus: string;
+    if (isFullySettled) {
+      nextStatus = "Settled";
+    } else if (hasRemainingOverdue) {
+      nextStatus = "Overdue";
+    } else {
+      // No overdue installments left — but only downgrade if it was Overdue
+      nextStatus = loan.status === "Overdue" ? "Active" : loan.status;
+    }
 
     // ---------- Run everything in a transaction ----------
     let createdPaymentId = "";
@@ -1400,6 +1542,19 @@ export class LoansService {
         console.error("SMS send failed:", err);
       }
     }
+
+    await this.eventBus.publish({
+      type: "payment.recorded",
+      payload: { loanId: id, paymentId: createdPaymentId, amount },
+    });
+    await this.eventBus.publish({
+      type: "loans.changed",
+      payload: { action: "payment", loanId: id },
+    });
+    await this.eventBus.publish({
+      type: "stats.changed",
+      payload: {},
+    });
 
     return this.formatPaymentResponse(freshPayment, alloc, smsResult);
   }
@@ -1578,6 +1733,15 @@ export class LoansService {
       }
     }
 
+    await this.eventBus.publish({
+      type: "loans.changed",
+      payload: { action: "settled", loanId: id },
+    });
+    await this.eventBus.publish({
+      type: "stats.changed",
+      payload: {},
+    });
+
     // Return the fully-hydrated loan with the new quote
     return this.getOne(loan.id);
   }
@@ -1663,7 +1827,8 @@ export class LoansService {
     };
   }
 
-  private formatLoanResponse(loan: any): any {
+  // private formatLoanResponse(loan: any): any {
+  private async formatLoanResponse(loan: any): Promise<any> {
     // Calculate next due date and amount from installments
     let nextDueDate: string | undefined = undefined;
     let nextDueAmount: number | undefined = undefined;
@@ -1684,6 +1849,32 @@ export class LoansService {
         nextDueAmount = Number(nextPendingInstallment.remainingAmount);
       }
     }
+
+    // ---------------------------------------------------------------
+    // Mint fresh 1-hour download URLs for every document
+    // ---------------------------------------------------------------
+    const documents = await Promise.all(
+      (loan.documents ?? []).map(async (doc: any) => ({
+        id: doc.id,
+        loanId: doc.loanId,
+        documentType: doc.documentType,
+        fileName: doc.fileName,
+        fileKey: doc.fileKey,
+        // Fresh presigned download URL — expires in 30 min
+        fileUrl: await this.storage.presignDownload(
+          doc.fileKey,
+          doc.fileName,
+          1800,
+        ),
+        // Inline preview (opens in browser, expires 30 min)
+        previewUrl: await this.storage.presignGet(doc.fileKey, 1800),
+        status: doc.status,
+        uploadedAt: doc.uploadedAt,
+        verifiedAt: doc.verifiedAt,
+        verifiedBy: doc.verifiedBy,
+        notes: doc.notes,
+      })),
+    );
 
     return {
       // Identity
@@ -1757,6 +1948,10 @@ export class LoansService {
           allocatedLateFee: Number(p.allocatedLateFee) || 0,
           installmentNumbersCovered: p.installmentNumbersCovered || [],
         })) || [],
+
+      // Documents
+      // documents: loan.documents,
+      documents: documents,
 
       // Early Settlement Quote
       earlySettlementQuote: loan.earlySettlementQuote || undefined,
