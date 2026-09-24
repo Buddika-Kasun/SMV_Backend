@@ -325,9 +325,13 @@ export class LoansController {
   @ApiUnauthorizedResponse({
     description: "Missing, invalid or expired bearer token.",
   })
-  async reject(@Param("id") id: string, @Body() body: RejectLoanDto) {
+  async reject(
+    @Param("id") id: string,
+    @Body() body: RejectLoanDto,
+    @CurrentUser() auth: AuthedUser,
+  ) {
     return ok(
-      await this.loansService.reject(id, body.reason),
+      await this.loansService.reject(id, body.reason, auth),
       "Loan application rejected",
     );
   }

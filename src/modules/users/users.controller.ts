@@ -34,6 +34,8 @@ import { UpdateUserDto } from "./dto/update-user.dto";
 import { PaginationDto } from "../../common/dto/pagination.dto";
 import { PaginatedResponseDto } from "../../common/dto/pagination-response.dto";
 import { PaginationService } from "../../common/services/pagination.service";
+import { CurrentUser } from "../../common/decorators/current-user.decorator";
+import { AuthedUser } from "../../common/guards/auth.types";
 
 @ApiTags("Users")
 @ApiBearerAuth()
@@ -102,8 +104,8 @@ export class UsersController {
   @ApiForbiddenResponse({
     description: "Authenticated role is not permitted to create users.",
   })
-  async create(@Body() body: CreateUserDto) {
-    const user = await this.usersService.create(body);
+  async create(@Body() body: CreateUserDto, @CurrentUser() auth: AuthedUser) {
+    const user = await this.usersService.create(body, auth);
     return {
       success: true,
       message: "User created successfully",
@@ -139,8 +141,12 @@ export class UsersController {
   @ApiForbiddenResponse({
     description: "Authenticated role is not permitted to update users.",
   })
-  async update(@Param("id") id: string, @Body() body: UpdateUserDto) {
-    const user = await this.usersService.update(id, body);
+  async update(
+    @Param("id") id: string,
+    @Body() body: UpdateUserDto,
+    @CurrentUser() auth: AuthedUser,
+  ) {
+    const user = await this.usersService.update(id, body, auth);
     return {
       success: true,
       message: "User updated successfully",
@@ -171,8 +177,8 @@ export class UsersController {
     description: "Missing, invalid or expired bearer token.",
   })
   @ApiForbiddenResponse({ description: "Only `admin` may delete users." })
-  async remove(@Param("id") id: string) {
-    await this.usersService.remove(id);
+  async remove(@Param("id") id: string, @CurrentUser() auth: AuthedUser) {
+    await this.usersService.remove(id, auth);
     return {
       success: true,
       message: "User deleted successfully",

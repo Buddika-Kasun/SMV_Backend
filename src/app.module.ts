@@ -14,6 +14,7 @@ import { HealthController } from './modules/health/health.controller';
 import { ScheduleModule } from '@nestjs/schedule';
 import { EventsModule } from './modules/event/events.module';
 import { RedisModule } from './config/redis.module';
+import { NotificationsModule } from './modules/notifications/notifications.module';
 
 @Module({
   imports: [
@@ -31,6 +32,7 @@ import { RedisModule } from './config/redis.module';
     DashboardModule,
     RedisModule,
     EventsModule,
+    NotificationsModule,
   ],
   controllers: [HealthController],
 })

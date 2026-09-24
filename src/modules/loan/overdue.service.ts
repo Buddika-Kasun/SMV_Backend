@@ -25,9 +25,9 @@ export class OverdueService {
   ) {}
 
   // ---------------------------------------------------------------------------
-  // Cron entry — runs daily at 06:00 Asia/Colombo
+  // Cron entry — runs daily at 07:00 Asia/Colombo
   // ---------------------------------------------------------------------------
-  @Cron("0 6 * * *", {
+  @Cron("0 7 * * *", {
     name: "overdue-check",
     timeZone: "Asia/Colombo",
   })

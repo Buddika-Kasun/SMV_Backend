@@ -538,7 +538,7 @@ export class LoansService {
     return await this.formatLoanResponse(updated);
   }
 
-  async reject(id: string, reason: string): Promise<any> {
+  async reject(id: string, reason: string, auth: AuthedUser): Promise<any> {
     const loan = await this.prisma.loan.findUnique({
       where: { id },
       include: { customer: true },
@@ -561,6 +561,7 @@ export class LoansService {
       data: {
         status: "Rejected",
         rejectedAt: new Date(),
+        approvedById: (auth as any).sub || (auth as any).id,
         rejectReason: reason,
       },
       include: {
