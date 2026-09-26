@@ -198,7 +198,7 @@ export class DashboardService {
         OR: [
           { customer: { fullName: { contains: q, mode: "insensitive" } } },
           { customer: { idNumber: { contains: q } } },
-          //   { customer: { phone: { contains: q } } },
+          { customer: { phone: { contains: q } } },
           { loanNumber: { contains: q, mode: "insensitive" } },
           //   { account: { accountNumber: { contains: q, mode: "insensitive" } } },
           // Optional — uncomment if you want status text search too
