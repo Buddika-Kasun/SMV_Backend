@@ -9,12 +9,24 @@ import {
   PaginatedResult,
 } from "../../common/services/pagination.service";
 import { PaginationDto } from "../../common/dto/pagination.dto";
+import { SmsDeliveryError, SmsService } from "../sms/sms.service";
+import { createHash, randomInt } from "crypto";
+import { smsRecipient } from "../../common/utils/phone";
+import { SendPhoneOtpDto, VerifyPhoneOtpDto } from "./dto/verify-phone.dto";
+
+/** How long an OTP is valid for. */
+const OTP_TTL_MINUTES = 15;
+/** Max failed verification attempts before the OTP is invalidated. */
+const OTP_MAX_ATTEMPTS = 5;
+/** Minimum interval between two OTP sends to the same phone (seconds). */
+const OTP_RESEND_COOLDOWN_SECONDS = 60;
 
 @Injectable()
 export class CustomersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly paginationService: PaginationService,
+    private readonly sms: SmsService,
   ) {}
 
   // ---------------------------------------------------------------------------
@@ -144,6 +156,137 @@ export class CustomersService {
     });
 
     return rows;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Phone OTP — send
+  // ---------------------------------------------------------------------------
+  async sendPhoneOtp(input: SendPhoneOtpDto): Promise<{ requestId: string }> {
+    const phone = smsRecipient(input.phone); // normalized: 94712345678
+
+    // Cooldown check — don't allow spam
+    const recent = await this.prisma.phoneOtp.findFirst({
+      where: {
+        phone,
+        consumedAt: null,
+        createdAt: {
+          gte: new Date(Date.now() - OTP_RESEND_COOLDOWN_SECONDS * 1000),
+        },
+      },
+      orderBy: { createdAt: "desc" },
+    });
+
+    if (recent) {
+      const waitSeconds = Math.ceil(
+        (recent.createdAt.getTime() +
+          OTP_RESEND_COOLDOWN_SECONDS * 1000 -
+          Date.now()) /
+          1000,
+      );
+      throw new BadRequestException(
+        `Please wait ${waitSeconds}s before requesting another OTP.`,
+      );
+    }
+
+    // Generate a 6-digit code
+    const code = String(randomInt(0, 10_000)).padStart(4, "0");
+    const codeHash = createHash("sha256").update(code).digest("hex");
+    const expiresAt = new Date(Date.now() + OTP_TTL_MINUTES * 60 * 1000);
+
+    // Invalidate any previous unconsumed OTPs for this phone
+    await this.prisma.phoneOtp.updateMany({
+      where: { phone, consumedAt: null },
+      data: { consumedAt: new Date() },
+    });
+
+    const row = await this.prisma.phoneOtp.create({
+      data: {
+        phone,
+        codeHash,
+        expiresAt,
+      },
+    });
+
+    // Send SMS (best-effort — log if it fails but don't roll back the OTP row)
+    try {
+      await this.sms.send({
+        recipient: phone,
+        message: `Your SMV Holdings verification code is ${code}. Valid for ${OTP_TTL_MINUTES} minutes. Do not share this code.`,
+      });
+    } catch (err) {
+      // Roll back the OTP row — the user can't use it if SMS never went out
+      await this.prisma.phoneOtp
+        .delete({ where: { id: row.id } })
+        .catch(() => {});
+
+      if (err instanceof SmsDeliveryError) {
+        // Give the operator a useful message
+        throw new BadRequestException(err.message);
+      }
+      throw new BadRequestException(
+        "Failed to send verification code. Please try again later.",
+      );
+    }
+
+    // this.logger.log(`OTP sent to ${phone} (requestId=${row.id})`);
+
+    return { requestId: row.id };
+  }
+
+  // ---------------------------------------------------------------------------
+  // Phone OTP — verify
+  // ---------------------------------------------------------------------------
+  async verifyPhoneOtp(
+    input: VerifyPhoneOtpDto,
+  ): Promise<{ verified: boolean }> {
+    const phone = smsRecipient(input.phone);
+
+    const row = await this.prisma.phoneOtp.findFirst({
+      where: { phone, consumedAt: null },
+      orderBy: { createdAt: "desc" },
+    });
+
+    if (!row) {
+      throw new BadRequestException("No active OTP found for this phone.");
+    }
+
+    if (row.expiresAt.getTime() < Date.now()) {
+      await this.prisma.phoneOtp.update({
+        where: { id: row.id },
+        data: { consumedAt: new Date() },
+      });
+      throw new BadRequestException("OTP has expired. Request a new one.");
+    }
+
+    if (row.attempts >= OTP_MAX_ATTEMPTS) {
+      await this.prisma.phoneOtp.update({
+        where: { id: row.id },
+        data: { consumedAt: new Date() },
+      });
+      throw new BadRequestException(
+        "Too many failed attempts. Request a new OTP.",
+      );
+    }
+
+    const submittedHash = createHash("sha256").update(input.code).digest("hex");
+
+    if (submittedHash !== row.codeHash) {
+      await this.prisma.phoneOtp.update({
+        where: { id: row.id },
+        data: { attempts: { increment: 1 } },
+      });
+      throw new BadRequestException("Invalid OTP code.");
+    }
+
+    // Success — mark consumed
+    await this.prisma.phoneOtp.update({
+      where: { id: row.id },
+      data: { consumedAt: new Date() },
+    });
+
+    // this.logger.log(`OTP verified for ${phone}`);
+
+    return { verified: true };
   }
 
   // ---------------------------------------------------------------------------

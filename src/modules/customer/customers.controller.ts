@@ -1,5 +1,6 @@
-import { Controller, Get, Param, Query, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, HttpCode, Param, Post, Query, UseGuards } from "@nestjs/common";
 import {
+  ApiBadRequestResponse,
   ApiBearerAuth,
   ApiNotFoundResponse,
   ApiOkResponse,
@@ -15,6 +16,7 @@ import { RolesGuard } from "../../common/guards/roles.guard";
 import { PaginationDto } from "../../common/dto/pagination.dto";
 import { PaginationService } from "../../common/services/pagination.service";
 import { CustomersService } from "./customers.service";
+import { SendPhoneOtpDto, VerifyPhoneOtpDto } from "./dto/verify-phone.dto";
 
 @ApiTags("Customers")
 @ApiBearerAuth()
@@ -84,7 +86,7 @@ export class CustomersController {
       "Customer stats retrieved",
     );
   }
-  
+
   @Get("lookup")
   @ApiQuery({
     name: "idNumber",
@@ -103,6 +105,46 @@ export class CustomersController {
     return ok(
       await this.customersService.lookupByIdNumber(idNumber),
       "Customers found",
+    );
+  }
+
+  @Post("verify-phone/send")
+  @HttpCode(200)
+  @ApiOperation({
+    summary: "Send a phone verification OTP",
+    description:
+      "Sends a 4-digit OTP via SMS. Enforces a 60-second cooldown between requests.",
+  })
+  @ApiOkResponse({
+    description: "Returns `{ requestId }` — the id of the created OTP record.",
+  })
+  @ApiBadRequestResponse({
+    description: "Invalid phone number or resend cooldown active.",
+  })
+  async sendPhoneOtp(@Body() body: SendPhoneOtpDto) {
+    return ok(
+      await this.customersService.sendPhoneOtp(body),
+      "Verification code sent",
+    );
+  }
+
+  @Post("verify-phone/confirm")
+  @HttpCode(200)
+  @ApiOperation({
+    summary: "Confirm a phone verification OTP",
+    description:
+      "Verifies the 4-digit code sent to the phone. Consumes the OTP on success.",
+  })
+  @ApiOkResponse({
+    description: "Returns `{ verified: true }` on success.",
+  })
+  @ApiBadRequestResponse({
+    description: "Invalid, expired, or too many failed attempts.",
+  })
+  async verifyPhoneOtp(@Body() body: VerifyPhoneOtpDto) {
+    return ok(
+      await this.customersService.verifyPhoneOtp(body),
+      "Phone verified",
     );
   }
 
