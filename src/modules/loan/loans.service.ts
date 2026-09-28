@@ -38,6 +38,7 @@ import {
 } from "../../shared/types";
 import { accountNumber, customerId, loanId } from "../../common/utils/id";
 import { Prisma } from "@prisma/client";
+import { EventBusService } from "../event/event-bus.service";
 
 @Injectable()
 export class LoansService {
@@ -46,6 +47,7 @@ export class LoansService {
     private readonly storage: StorageService,
     private readonly sms: SmsService,
     private readonly paginationService: PaginationService,
+    private readonly eventBus: EventBusService,
   ) {}
 
   // ---------------------------------------------------------------------------
@@ -236,7 +238,18 @@ export class LoansService {
       throw new NotFoundException("No loans found with this status");
     }
 
-    return rows.map((row) => ({
+    // Sort by the order of `statuses` array, then by createdAt desc within each group
+    const statusOrder = new Map(statuses.map((s, i) => [s, i]));
+
+    const sorted = [...rows].sort((a, b) => {
+      const ai = statusOrder.get(a.status) ?? Number.MAX_SAFE_INTEGER;
+      const bi = statusOrder.get(b.status) ?? Number.MAX_SAFE_INTEGER;
+      if (ai !== bi) return ai - bi;
+      // Same status — keep createdAt desc (already fetched that way, but be explicit)
+      return b.createdAt.getTime() - a.createdAt.getTime();
+    });
+
+    return sorted.map((row) => ({
       id: row.id,
       loanNumber: row.loanNumber,
       accountNumber: row.accountNumber || row.account?.accountNumber,
@@ -471,6 +484,12 @@ export class LoansService {
       return loan.id;
     });
 
+    // Publish after commit
+    await this.eventBus.publish({
+      type: "loans.changed",
+      payload: { action: "created", loanId: loanId_ },
+    });
+
     // 3. Return the fully hydrated loan (outside the transaction is fine)
     return this.getOne(loanId_);
   }
@@ -511,10 +530,15 @@ export class LoansService {
       },
     });
 
+    await this.eventBus.publish({
+      type: "loans.changed",
+      payload: { action: "approved", loanId: id },
+    });
+
     return await this.formatLoanResponse(updated);
   }
 
-  async reject(id: string, reason: string): Promise<any> {
+  async reject(id: string, reason: string, auth: AuthedUser): Promise<any> {
     const loan = await this.prisma.loan.findUnique({
       where: { id },
       include: { customer: true },
@@ -537,6 +561,7 @@ export class LoansService {
       data: {
         status: "Rejected",
         rejectedAt: new Date(),
+        approvedById: (auth as any).sub || (auth as any).id,
         rejectReason: reason,
       },
       include: {
@@ -545,6 +570,11 @@ export class LoansService {
         installments: true,
         guarantor: true,
       },
+    });
+
+    await this.eventBus.publish({
+      type: "loans.changed",
+      payload: { action: "rejected", loanId: id },
     });
 
     return await this.formatLoanResponse(updated);
@@ -783,6 +813,11 @@ export class LoansService {
         guarantor: true,
         documents: true,
       },
+    });
+
+    await this.eventBus.publish({
+      type: "loans.changed",
+      payload: { action: "kyc_updated", loanId: id },
     });
 
     return await this.formatLoanResponse(updated);
@@ -1269,6 +1304,15 @@ export class LoansService {
       },
     });
 
+    await this.eventBus.publish({
+      type: "loans.changed",
+      payload: { action: "disbursed", loanId: id },
+    });
+    await this.eventBus.publish({
+      type: "stats.changed",
+      payload: {},
+    });
+
     return await this.formatLoanResponse(updated);
   }
 
@@ -1499,6 +1543,19 @@ export class LoansService {
       }
     }
 
+    await this.eventBus.publish({
+      type: "payment.recorded",
+      payload: { loanId: id, paymentId: createdPaymentId, amount },
+    });
+    await this.eventBus.publish({
+      type: "loans.changed",
+      payload: { action: "payment", loanId: id },
+    });
+    await this.eventBus.publish({
+      type: "stats.changed",
+      payload: {},
+    });
+
     return this.formatPaymentResponse(freshPayment, alloc, smsResult);
   }
 
@@ -1676,6 +1733,15 @@ export class LoansService {
       }
     }
 
+    await this.eventBus.publish({
+      type: "loans.changed",
+      payload: { action: "settled", loanId: id },
+    });
+    await this.eventBus.publish({
+      type: "stats.changed",
+      payload: {},
+    });
+
     // Return the fully-hydrated loan with the new quote
     return this.getOne(loan.id);
   }
@@ -1785,33 +1851,30 @@ export class LoansService {
     }
 
     // ---------------------------------------------------------------
-  // Mint fresh 1-hour download URLs for every document
-  // ---------------------------------------------------------------
-  const documents = await Promise.all(
-    (loan.documents ?? []).map(async (doc: any) => ({
-      id: doc.id,
-      loanId: doc.loanId,
-      documentType: doc.documentType,
-      fileName: doc.fileName,
-      fileKey: doc.fileKey,
-      // Fresh presigned download URL — expires in 30 min
-      fileUrl: await this.storage.presignDownload(
-        doc.fileKey,
-        doc.fileName,
-        1800,
-      ),
-      // Inline preview (opens in browser, expires 30 min)
-      previewUrl: await this.storage.presignGet(
-        doc.fileKey,
-        1800,
-      ),
-      status: doc.status,
-      uploadedAt: doc.uploadedAt,
-      verifiedAt: doc.verifiedAt,
-      verifiedBy: doc.verifiedBy,
-      notes: doc.notes,
-    })),
-  );
+    // Mint fresh 1-hour download URLs for every document
+    // ---------------------------------------------------------------
+    const documents = await Promise.all(
+      (loan.documents ?? []).map(async (doc: any) => ({
+        id: doc.id,
+        loanId: doc.loanId,
+        documentType: doc.documentType,
+        fileName: doc.fileName,
+        fileKey: doc.fileKey,
+        // Fresh presigned download URL — expires in 30 min
+        fileUrl: await this.storage.presignDownload(
+          doc.fileKey,
+          doc.fileName,
+          1800,
+        ),
+        // Inline preview (opens in browser, expires 30 min)
+        previewUrl: await this.storage.presignGet(doc.fileKey, 1800),
+        status: doc.status,
+        uploadedAt: doc.uploadedAt,
+        verifiedAt: doc.verifiedAt,
+        verifiedBy: doc.verifiedBy,
+        notes: doc.notes,
+      })),
+    );
 
     return {
       // Identity

@@ -12,6 +12,9 @@ import { JwtAuthGuard } from "../../common/guards/jwt-auth.guard";
 import { RolesGuard } from "../../common/guards/roles.guard";
 import { DashboardService } from "./dashboard.service";
 import { SearchLoansDto } from "./dto/search-loans.dto";
+import { Roles } from "../../common/decorators/roles.decorator";
+import { CurrentUser } from "../../common/decorators/current-user.decorator";
+import { AuthedUser } from "../../common/guards/auth.types";
 
 @ApiTags("Dashboard")
 @ApiBearerAuth()
@@ -32,9 +35,11 @@ export class DashboardController {
   @ApiUnauthorizedResponse({
     description: "Missing, invalid or expired bearer token.",
   })
-  async getHeader() {
+  async getHeader(
+    @CurrentUser() auth: AuthedUser
+  ) {
     return ok(
-      await this.dashboardService.getHeader(),
+      await this.dashboardService.getHeader(auth),
       "Header stats retrieved",
     );
   }
@@ -93,6 +98,7 @@ export class DashboardController {
   }
 
   @Get()
+  @Roles("admin", "manager")
   @ApiOperation({
     summary: "Get full dashboard",
     description: "Portfolio metrics, pending actions, and latest 10 loans.",

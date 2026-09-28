@@ -22,6 +22,9 @@ export const config = {
   nodeEnv: process.env.NODE_ENV ?? "development",
   port: num(process.env.PORT, 3000),
   databaseUrl: process.env.DATABASE_URL ?? "",
+  redis: {
+    url: process.env.REDIS_URL ?? "redis://localhost:6379",
+  },
   jwt: {
     secret: process.env.JWT_SECRET ?? "smv-holdings-dev-secret",
     expiresIn: process.env.JWT_EXPIRES_IN ?? "7d",
@@ -86,6 +89,21 @@ export function validateEnvironment(): void {
   ) {
     warnings.push(
       "DATABASE_URL in production has no sslmode=require — most managed Postgres requires TLS.",
+    );
+  }
+
+  // ---- Redis ----
+  if (!/^rediss?:\/\//.test(config.redis.url)) {
+    errors.push("REDIS_URL must start with redis:// or rediss:// (TLS).");
+  }
+  if (
+    config.nodeEnv === "production" &&
+    config.redis.url.startsWith("redis://") &&
+    !config.redis.url.includes("localhost") &&
+    !config.redis.url.includes("127.0.0.1")
+  ) {
+    warnings.push(
+      "REDIS_URL uses redis:// in production against a remote host — most managed Redis providers require TLS (rediss://).",
     );
   }
 
@@ -176,6 +194,7 @@ export function logConfigSummary(): void {
   validationLogger.log(
     `  DATABASE_URL       = ${redactDb(config.databaseUrl)}`,
   );
+  validationLogger.log(`  REDIS_URL          = ${redactDb(config.redis.url)}`);
   validationLogger.log(`  JWT_SECRET         = ${mask(config.jwt.secret)}`);
   validationLogger.log(
     `  JWT_REFRESH_SECRET = ${mask(config.jwt.refreshSecret)}`,
