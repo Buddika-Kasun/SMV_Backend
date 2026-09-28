@@ -13,6 +13,7 @@ import { SmsDeliveryError, SmsService } from "../sms/sms.service";
 import { createHash, randomInt } from "crypto";
 import { smsRecipient } from "../../common/utils/phone";
 import { SendPhoneOtpDto, VerifyPhoneOtpDto } from "./dto/verify-phone.dto";
+import { config } from "../../config/env";
 
 /** How long an OTP is valid for. */
 const OTP_TTL_MINUTES = 15;
@@ -161,6 +162,77 @@ export class CustomersService {
   // ---------------------------------------------------------------------------
   // Phone OTP — send
   // ---------------------------------------------------------------------------
+  // async sendPhoneOtp(input: SendPhoneOtpDto): Promise<{ requestId: string }> {
+  //   const phone = smsRecipient(input.phone); // normalized: 94712345678
+
+  //   // Cooldown check — don't allow spam
+  //   const recent = await this.prisma.phoneOtp.findFirst({
+  //     where: {
+  //       phone,
+  //       consumedAt: null,
+  //       createdAt: {
+  //         gte: new Date(Date.now() - OTP_RESEND_COOLDOWN_SECONDS * 1000),
+  //       },
+  //     },
+  //     orderBy: { createdAt: "desc" },
+  //   });
+
+  //   if (recent) {
+  //     const waitSeconds = Math.ceil(
+  //       (recent.createdAt.getTime() +
+  //         OTP_RESEND_COOLDOWN_SECONDS * 1000 -
+  //         Date.now()) /
+  //         1000,
+  //     );
+  //     throw new BadRequestException(
+  //       `Please wait ${waitSeconds}s before requesting another OTP.`,
+  //     );
+  //   }
+
+  //   // Generate a 6-digit code
+  //   const code = String(randomInt(0, 10_000)).padStart(4, "0");
+  //   const codeHash = createHash("sha256").update(code).digest("hex");
+  //   const expiresAt = new Date(Date.now() + OTP_TTL_MINUTES * 60 * 1000);
+
+  //   // Invalidate any previous unconsumed OTPs for this phone
+  //   await this.prisma.phoneOtp.updateMany({
+  //     where: { phone, consumedAt: null },
+  //     data: { consumedAt: new Date() },
+  //   });
+
+  //   const row = await this.prisma.phoneOtp.create({
+  //     data: {
+  //       phone,
+  //       codeHash,
+  //       expiresAt,
+  //     },
+  //   });
+
+  //   // Send SMS (best-effort — log if it fails but don't roll back the OTP row)
+  //   try {
+  //     await this.sms.send({
+  //       recipient: phone,
+  //       message: `Your SMV Holdings verification code is ${code}. Valid for ${OTP_TTL_MINUTES} minutes. Do not share this code.`,
+  //     });
+  //   } catch (err) {
+  //     // Roll back the OTP row — the user can't use it if SMS never went out
+  //     await this.prisma.phoneOtp
+  //       .delete({ where: { id: row.id } })
+  //       .catch(() => {});
+
+  //     if (err instanceof SmsDeliveryError) {
+  //       // Give the operator a useful message
+  //       throw new BadRequestException(err.message);
+  //     }
+  //     throw new BadRequestException(
+  //       "Failed to send verification code. Please try again later.",
+  //     );
+  //   }
+
+  //   // this.logger.log(`OTP sent to ${phone} (requestId=${row.id})`);
+
+  //   return { requestId: row.id };
+  // }
   async sendPhoneOtp(input: SendPhoneOtpDto): Promise<{ requestId: string }> {
     const phone = smsRecipient(input.phone); // normalized: 94712345678
 
@@ -188,9 +260,8 @@ export class CustomersService {
       );
     }
 
-    // Generate a 6-digit code
-    const code = String(randomInt(0, 10_000)).padStart(4, "0");
-    const codeHash = createHash("sha256").update(code).digest("hex");
+    // Generate a 4-digit code
+    const generatedCode = String(randomInt(0, 10_000)).padStart(4, "0");
     const expiresAt = new Date(Date.now() + OTP_TTL_MINUTES * 60 * 1000);
 
     // Invalidate any previous unconsumed OTPs for this phone
@@ -199,33 +270,55 @@ export class CustomersService {
       data: { consumedAt: new Date() },
     });
 
+    // Create the OTP row first, using the real generated code
     const row = await this.prisma.phoneOtp.create({
       data: {
         phone,
-        codeHash,
+        codeHash: createHash("sha256").update(generatedCode).digest("hex"),
         expiresAt,
       },
     });
 
-    // Send SMS (best-effort — log if it fails but don't roll back the OTP row)
+    // Try to send via the gateway
     try {
       await this.sms.send({
         recipient: phone,
-        message: `Your SMV Holdings verification code is ${code}. Valid for ${OTP_TTL_MINUTES} minutes. Do not share this code.`,
+        message: `Your SMV Holdings verification code is ${generatedCode}. Valid for ${OTP_TTL_MINUTES} minutes. Do not share this code.`,
       });
     } catch (err) {
-      // Roll back the OTP row — the user can't use it if SMS never went out
-      await this.prisma.phoneOtp
-        .delete({ where: { id: row.id } })
-        .catch(() => {});
+      const isProd = config.nodeEnv === "production";
 
-      if (err instanceof SmsDeliveryError) {
-        // Give the operator a useful message
-        throw new BadRequestException(err.message);
+      if (isProd) {
+        // Production: no SMS means no OTP. Clean up and report.
+        await this.prisma.phoneOtp
+          .delete({ where: { id: row.id } })
+          .catch(() => {});
+
+        if (err instanceof SmsDeliveryError) {
+          throw new BadRequestException(err.message);
+        }
+        throw new BadRequestException(
+          "Failed to send verification code. Please try again later.",
+        );
       }
-      throw new BadRequestException(
-        "Failed to send verification code. Please try again later.",
-      );
+
+      // Dev / staging fallback: swap the OTP code to 0000 so the tester can
+      // complete the verify flow without a live SMS gateway.
+      const devCode = "0000";
+      await this.prisma.phoneOtp.update({
+        where: { id: row.id },
+        data: {
+          codeHash: createHash("sha256").update(devCode).digest("hex"),
+        },
+      });
+
+      // this.logger.warn(
+      //   `SMS failed in dev — OTP for ${phone} overridden to "${devCode}". Reason: ${
+      //     err instanceof Error ? err.message : String(err)
+      //   }`,
+      // );
+
+      // Do NOT rethrow. The test can now proceed using 0000.
     }
 
     // this.logger.log(`OTP sent to ${phone} (requestId=${row.id})`);
