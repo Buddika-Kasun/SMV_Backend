@@ -7,6 +7,7 @@ import {
 import { Subscription } from "rxjs";
 import { PrismaService } from "../../config/prisma.service";
 import { EventBusService, AppEvent } from "../event/event-bus.service";
+import { config } from "../../config/env";
 
 const ALL_ROLES = ["admin", "manager", "staff"] as const;
 const ADMINS_MANAGERS = ["admin", "manager"] as const;
@@ -45,6 +46,14 @@ export class NotificationListenerService
   // Router
   // ---------------------------------------------------------------------------
   private async handleEvent(event: AppEvent): Promise<void> {
+    // Global kill switch — when disabled, no notifications are created or pushed.
+    if (!config.notifications.enabled) {
+      this.logger.debug?.(
+        `Notifications disabled — skipping event type=${event.type}`,
+      );
+      return;
+    }
+
     this.logger.debug?.(
       `handleEvent: type=${event.type} action=${event.payload?.action ?? "-"}`,
     );
