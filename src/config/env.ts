@@ -32,6 +32,10 @@ export const config = {
       process.env.JWT_REFRESH_SECRET ?? "smv-holdings-dev-refresh-secret",
     refreshExpiresIn: process.env.JWT_REFRESH_EXPIRES_IN ?? "30d",
   },
+  notifications: {
+    enabled:
+      (process.env.NOTIFICATIONS_ENABLED ?? "true").toLowerCase() !== "false",
+  },
   sms: {
     apiKey: process.env.TEXT_LK_API_KEY ?? "",
     senderId: process.env.TEXT_LK_SENDER_ID ?? "",
