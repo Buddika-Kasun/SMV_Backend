@@ -1290,6 +1290,13 @@ export class LoansService {
       console.error("Disbursement SMS send failed:", err);
     }
 
+    // Guarantor notification (if the loan has a guarantor with a phone)
+    try {
+      await this.smsGuarantorDisbursementAlert(freshLoan);
+    } catch (err) {
+      console.error("Disbursement SMS to guarantor failed:", err);
+    }
+
     // Optional: persist the note somewhere (e.g. on the loan or a log table)
     // if (body.notes) { ... }
 
@@ -2181,6 +2188,44 @@ export class LoansService {
       return {
         status: "FAILED",
         recipient: loan.customer.phone,
+        message,
+      };
+    }
+  }
+
+  private async smsGuarantorDisbursementAlert(
+    loan: any,
+  ): Promise<{ status: string; recipient: string; message: string } | null> {
+    // No guarantor on this loan → nothing to send
+    const guarantor = loan.guarantor;
+    if (!guarantor || !guarantor.phone) {
+      return null;
+    }
+
+    const message =
+      `Dear ${guarantor.fullName}, you are the guarantor for ` +
+      `${loan.customer.fullName}'s loan ${loan.loanNumber}. ` +
+      `The loan has been disbursed.` +
+      ` Thank you, SMV Holdings.`;
+
+    try {
+      const result = await this.sms.send({
+        recipient: guarantor.phone,
+        message,
+        loanId: loan.id,
+        customerName: guarantor.fullName,
+      });
+
+      return {
+        status: (result as any)?.status ?? "SENT",
+        recipient: guarantor.phone,
+        message,
+      };
+    } catch (error) {
+      console.error("Guarantor disbursement SMS failed:", error);
+      return {
+        status: "FAILED",
+        recipient: guarantor.phone,
         message,
       };
     }
