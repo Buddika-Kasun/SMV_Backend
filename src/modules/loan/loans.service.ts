@@ -1566,6 +1566,197 @@ export class LoansService {
     return this.formatPaymentResponse(freshPayment, alloc, smsResult);
   }
 
+  // async earlySettle(id: string, dto: ExecuteSettlementDto): Promise<any> {
+  //   const loan = await this.prisma.loan.findUnique({
+  //     where: { id },
+  //     include: {
+  //       customer: true,
+  //       account: true,
+  //       installments: { orderBy: { installmentNumber: "asc" } },
+  //       payments: {
+  //         orderBy: { createdAt: "desc" },
+  //         include: { receivedBy: true },
+  //       },
+  //     },
+  //   });
+
+  //   if (!loan) throw new NotFoundException("Loan not found");
+
+  //   // Only disbursed, not-yet-closed loans can be settled
+  //   const closedStatuses = ["Settled", "Early_Settled", "Rejected"];
+  //   if (closedStatuses.includes(loan.status)) {
+  //     throw new BadRequestException("Loan is already closed");
+  //   }
+  //   if (!loan.disbursedAmount || Number(loan.disbursedAmount) <= 0) {
+  //     throw new BadRequestException(
+  //       "Loan must be disbursed before early settlement",
+  //     );
+  //   }
+
+  //   const refDate = dto.settlementDate
+  //     ? dto.settlementDate.slice(0, 10)
+  //     : todayISO();
+
+  //   // Build the installment view for the quote calculator
+  //   const installmentsForCalc = loan.installments.map((inst) => ({
+  //     installmentNumber: inst.installmentNumber,
+  //     dueDate: inst.dueDate.toISOString().slice(0, 10),
+  //     principalAmount: Number(inst.principalAmount),
+  //     interestAmount: Number(inst.interestAmount),
+  //     totalInstallment: Number(inst.totalInstallment),
+  //     paidAmount: Number(inst.paidAmount),
+  //     remainingAmount: Number(inst.remainingAmount),
+  //     status: inst.status as InstallmentStatus,
+  //     lateFee: Number(inst.lateFee),
+  //     paidPrincipal: Number(inst.paidPrincipal) || 0,
+  //     paidInterest: Number(inst.paidInterest) || 0,
+  //     lateFeePaid: Number(inst.lateFeePaid) || 0,
+  //   }));
+
+  //   // Shape a Loan for the quote calculator (server always recomputes)
+  //   const loanLike: Loan = {
+  //     id: loan.id,
+  //     accountNumber: loan.accountNumber,
+  //     customerName: loan.customer.fullName,
+  //     customerPhone: loan.customer.phone,
+  //     customerEmail: loan.customer.email || "",
+  //     loanType: loan.loanType as LoanType,
+  //     requestedAmount: Number(loan.requestedAmount),
+  //     disbursedAmount: Number(loan.disbursedAmount),
+  //     interestRatePerAnnum: Number(loan.interestRatePerAnnum),
+  //     termMonths: loan.termMonths,
+  //     repaymentFrequency: loan.repaymentFrequency as RepaymentFrequency,
+  //     interestMethod: loan.interestMethod as InterestMethod,
+  //     processingFee: Number(loan.processingFee),
+  //     earlySettlementPenaltyPercent: Number(loan.earlySettlementPenaltyPercent),
+  //     status: loan.status as Loan["status"],
+  //     requestedDate: loan.requestedDate.toISOString(),
+  //     installments: installmentsForCalc,
+  //     payments: loan.payments.map((p) => this.toPaymentRecord(p)),
+  //     totalPaidAmount: Number(loan.totalPaidAmount),
+  //     outstandingBalance: Number(loan.outstandingBalance),
+  //     purpose: loan.purpose || "",
+  //     creditScore: 0,
+  //     kyc: null as any,
+  //   };
+
+  //   // Compute the authoritative quote
+  //   const quote = calculateEarlySettlementQuote(loanLike, refDate);
+  //   const settlementAmount = roundTo(quote.totalSettlementAmount);
+
+  //   // Covered installment numbers = those not fully paid
+  //   const coveredInstallmentNumbers = installmentsForCalc
+  //     .filter((i) => i.status !== "Paid" || i.remainingAmount > 0)
+  //     .map((i) => i.installmentNumber);
+
+  //   const officerId = (dto as any).receivedBy; // will be null-safe below
+  //   const receivedById = dto.receivedBy || null;
+
+  //   // ---------- Run everything in a transaction ----------
+  //   let createdPaymentId = "";
+
+  //   await this.prisma.$transaction(async (tx) => {
+  //     // 1. Mark all installments as paid (settlement closes them)
+  //     for (const inst of loan.installments) {
+  //       if (inst.status === "Paid" && Number(inst.remainingAmount) <= 0) {
+  //         continue;
+  //       }
+
+  //       await tx.installment.update({
+  //         where: { id: inst.id },
+  //         data: {
+  //           paidAmount: Number(inst.totalInstallment),
+  //           remainingAmount: 0,
+  //           status: "Paid",
+  //           paidPrincipal: Number(inst.principalAmount),
+  //           paidInterest: Number(inst.interestAmount),
+  //           paidDate: new Date(refDate),
+  //         },
+  //       });
+  //     }
+
+  //     // 2. Create the settlement Payment record
+  //     const payment = await tx.payment.create({
+  //       data: {
+  //         loanId: loan.id,
+  //         customerName: loan.customer.fullName,
+  //         amount: settlementAmount,
+  //         paymentDate: new Date(refDate),
+  //         paymentMethod: dto.paymentMethod,
+  //         referenceNumber: dto.referenceNumber,
+  //         receivedById,
+  //         notes: dto.notes || "Early settlement payoff",
+  //         allocatedPrincipal: quote.outstandingPrincipalBalance,
+  //         allocatedInterest: quote.accruedInterestToDate,
+  //         allocatedLateFee: quote.earlySettlementPenaltyFee,
+  //         installmentNumbersCovered: coveredInstallmentNumbers,
+  //       },
+  //       select: { id: true },
+  //     });
+  //     createdPaymentId = payment.id;
+
+  //     // 3. Update the loan: status, quote, totals, dates
+  //     await tx.loan.update({
+  //       where: { id: loan.id },
+  //       data: {
+  //         status: "Early_Settled",
+  //         settledDate: new Date(refDate),
+  //         totalPaidAmount: {
+  //           increment: settlementAmount,
+  //         },
+  //         outstandingBalance: 0,
+  //         nextDueDate: null,
+  //         nextDueAmount: null,
+  //         earlySettlementQuote: quote as any,
+  //       },
+  //     });
+
+  //     // 4. Sync the linked LoanAccount
+  //     if (loan.accountId) {
+  //       await tx.loanAccount.update({
+  //         where: { id: loan.accountId },
+  //         data: {
+  //           totalCollected: { increment: settlementAmount },
+  //           remainingBalance: 0,
+  //         },
+  //       });
+  //     }
+  //   });
+
+  //   // ---------- SMS alert (best-effort, outside tx) ----------
+  //   const freshPayment = await this.prisma.payment.findUnique({
+  //     where: { id: createdPaymentId },
+  //     include: {
+  //       receivedBy: true,
+  //       loan: { include: { customer: true } },
+  //     },
+  //   });
+
+  //   if (freshPayment) {
+  //     try {
+  //       await this.smsSettlementAlert(loan, freshPayment, "early");
+  //     } catch (err) {
+  //       console.error("SMS send failed:", err);
+  //     }
+  //   }
+
+  //   await this.eventBus.publish({
+  //     type: "loans.changed",
+  //     payload: { action: "settled", loanId: id },
+  //   });
+  //   await this.eventBus.publish({
+  //     type: "stats.changed",
+  //     payload: {},
+  //   });
+
+  //   // Return the fully-hydrated loan with the new quote
+  //   return this.getOne(loan.id);
+  // }
+
+  // ---------------------------------------------------------------------------
+  // Document uploads
+  // ---------------------------------------------------------------------------
+
   async earlySettle(id: string, dto: ExecuteSettlementDto): Promise<any> {
     const loan = await this.prisma.loan.findUnique({
       where: { id },
@@ -1582,7 +1773,6 @@ export class LoansService {
 
     if (!loan) throw new NotFoundException("Loan not found");
 
-    // Only disbursed, not-yet-closed loans can be settled
     const closedStatuses = ["Settled", "Early_Settled", "Rejected"];
     if (closedStatuses.includes(loan.status)) {
       throw new BadRequestException("Loan is already closed");
@@ -1597,7 +1787,6 @@ export class LoansService {
       ? dto.settlementDate.slice(0, 10)
       : todayISO();
 
-    // Build the installment view for the quote calculator
     const installmentsForCalc = loan.installments.map((inst) => ({
       installmentNumber: inst.installmentNumber,
       dueDate: inst.dueDate.toISOString().slice(0, 10),
@@ -1613,7 +1802,6 @@ export class LoansService {
       lateFeePaid: Number(inst.lateFeePaid) || 0,
     }));
 
-    // Shape a Loan for the quote calculator (server always recomputes)
     const loanLike: Loan = {
       id: loan.id,
       accountNumber: loan.accountNumber,
@@ -1640,23 +1828,24 @@ export class LoansService {
       kyc: null as any,
     };
 
-    // Compute the authoritative quote
+    // ---- Compute authoritative quote + apply manual reduction ----
     const quote = calculateEarlySettlementQuote(loanLike, refDate);
-    const settlementAmount = roundTo(quote.totalSettlementAmount);
+    const basePayoff = roundTo(quote.totalSettlementAmount);
+    const reduction = roundTo(
+      Math.min(Math.max(Number(dto.reductionAmount ?? 0), 0), basePayoff),
+    );
+    const settlementAmount = roundTo(basePayoff - reduction);
 
-    // Covered installment numbers = those not fully paid
     const coveredInstallmentNumbers = installmentsForCalc
       .filter((i) => i.status !== "Paid" || i.remainingAmount > 0)
       .map((i) => i.installmentNumber);
 
-    const officerId = (dto as any).receivedBy; // will be null-safe below
     const receivedById = dto.receivedBy || null;
 
-    // ---------- Run everything in a transaction ----------
     let createdPaymentId = "";
 
     await this.prisma.$transaction(async (tx) => {
-      // 1. Mark all installments as paid (settlement closes them)
+      // 1. Mark all installments as paid
       for (const inst of loan.installments) {
         if (inst.status === "Paid" && Number(inst.remainingAmount) <= 0) {
           continue;
@@ -1685,7 +1874,11 @@ export class LoansService {
           paymentMethod: dto.paymentMethod,
           referenceNumber: dto.referenceNumber,
           receivedById,
-          notes: dto.notes || "Early settlement payoff",
+          notes:
+            dto.notes ||
+            (reduction > 0
+              ? `Early settlement payoff (reduction LKR ${reduction.toLocaleString()})`
+              : "Early settlement payoff"),
           allocatedPrincipal: quote.outstandingPrincipalBalance,
           allocatedInterest: quote.accruedInterestToDate,
           allocatedLateFee: quote.earlySettlementPenaltyFee,
@@ -1695,23 +1888,26 @@ export class LoansService {
       });
       createdPaymentId = payment.id;
 
-      // 3. Update the loan: status, quote, totals, dates
+      // 3. Update the loan
       await tx.loan.update({
         where: { id: loan.id },
         data: {
           status: "Early_Settled",
           settledDate: new Date(refDate),
-          totalPaidAmount: {
-            increment: settlementAmount,
-          },
+          totalPaidAmount: { increment: settlementAmount },
           outstandingBalance: 0,
           nextDueDate: null,
           nextDueAmount: null,
-          earlySettlementQuote: quote as any,
+          earlySettlementQuote: {
+            ...quote,
+            basePayoff,
+            manualReduction: reduction,
+            finalPayoff: settlementAmount,
+          } as any,
         },
       });
 
-      // 4. Sync the linked LoanAccount
+      // 4. Sync the linked account
       if (loan.accountId) {
         await tx.loanAccount.update({
           where: { id: loan.accountId },
@@ -1723,7 +1919,7 @@ export class LoansService {
       }
     });
 
-    // ---------- SMS alert (best-effort, outside tx) ----------
+    // ---------- SMS alert ----------
     const freshPayment = await this.prisma.payment.findUnique({
       where: { id: createdPaymentId },
       include: {
@@ -1749,13 +1945,8 @@ export class LoansService {
       payload: {},
     });
 
-    // Return the fully-hydrated loan with the new quote
     return this.getOne(loan.id);
   }
-
-  // ---------------------------------------------------------------------------
-  // Document uploads
-  // ---------------------------------------------------------------------------
 
   async presignDocument(
     id: string,

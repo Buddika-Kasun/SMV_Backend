@@ -484,65 +484,108 @@ export function allocatePayment(
 // Early settlement quote
 // ---------------------------------------------------------------------------
 
+// export function calculateEarlySettlementQuote(
+//   loan: Loan,
+//   calcDate?: string,
+// ): EarlySettlementQuote {
+//   const today = calcDate ?? todayISO();
+
+//   const principalPaidToDate = roundTo(
+//     loan.installments.reduce((s, i) => s + (i.paidPrincipal ?? 0), 0),
+//   );
+//   const outstandingPrincipalBalance = roundTo(
+//     loan.disbursedAmount - principalPaidToDate,
+//   );
+
+//   let accruedInterestToDate = 0;
+//   let unearnedFutureInterest = 0;
+
+//   if (loan.repaymentFrequency === "Daily") {
+//     // Days-elapsed accrual for daily loans.
+//     const lastPaid = [...loan.installments]
+//       .filter((i) => i.status === "Paid" && i.paidDate)
+//       .sort((a, b) => (b.paidDate ?? "").localeCompare(a.paidDate ?? ""))[0];
+
+//     const fromDate = lastPaid?.paidDate ?? loan.disbursedDate ?? today;
+//     const daysElapsed = Math.max(0, diffDays(fromDate, today));
+
+//     const dailyRate = loan.interestRatePerAnnum / 100 / 365;
+//     accruedInterestToDate = roundTo(
+//       outstandingPrincipalBalance * dailyRate * daysElapsed,
+//     );
+
+//     const totalUnpaidInterest = roundTo(
+//       loan.installments.reduce(
+//         (s, i) => s + Math.max(0, i.interestAmount - (i.paidInterest ?? 0)),
+//         0,
+//       ),
+//     );
+//     unearnedFutureInterest = Math.max(
+//       0,
+//       roundTo(totalUnpaidInterest - accruedInterestToDate),
+//     );
+//   } else {
+//     // Per-installment accrual for Monthly / Weekly / Bi-Weekly.
+//     for (const inst of loan.installments) {
+//       const unpaidInterest = roundTo(
+//         inst.interestAmount - (inst.paidInterest ?? 0),
+//       );
+//       if (unpaidInterest <= 0) continue;
+//       if (isBefore(inst.dueDate, today))
+//         accruedInterestToDate += unpaidInterest;
+//       else unearnedFutureInterest += unpaidInterest;
+//     }
+//   }
+
+//   const penaltyPercent = loan.earlySettlementPenaltyPercent;
+//   const penaltyFee = roundTo(
+//     (outstandingPrincipalBalance * penaltyPercent) / 100,
+//   );
+//   const totalSettlementAmount = roundTo(
+//     outstandingPrincipalBalance + accruedInterestToDate + penaltyFee,
+//   );
+
+//   return {
+//     calculationDate: today,
+//     originalPrincipal: roundTo(loan.disbursedAmount),
+//     principalPaidToDate,
+//     outstandingPrincipalBalance,
+//     accruedInterestToDate: roundTo(accruedInterestToDate),
+//     unearnedFutureInterestWaived: roundTo(unearnedFutureInterest),
+//     earlySettlementPenaltyPercent: penaltyPercent,
+//     earlySettlementPenaltyFee: penaltyFee,
+//     totalSettlementAmount,
+//     totalSavingsForCustomer: roundTo(unearnedFutureInterest),
+//   };
+// }
+
 export function calculateEarlySettlementQuote(
   loan: Loan,
   calcDate?: string,
 ): EarlySettlementQuote {
   const today = calcDate ?? todayISO();
 
+  // Per-installment outstanding amounts
+  const outstandingPrincipalBalance = roundTo(
+    loan.installments.reduce(
+      (s, i) => s + Math.max(0, i.principalAmount - (i.paidPrincipal ?? 0)),
+      0,
+    ),
+  );
+
+  const outstandingInterest = roundTo(
+    loan.installments.reduce(
+      (s, i) => s + Math.max(0, i.interestAmount - (i.paidInterest ?? 0)),
+      0,
+    ),
+  );
+
   const principalPaidToDate = roundTo(
     loan.installments.reduce((s, i) => s + (i.paidPrincipal ?? 0), 0),
   );
-  const outstandingPrincipalBalance = roundTo(
-    loan.disbursedAmount - principalPaidToDate,
-  );
 
-  let accruedInterestToDate = 0;
-  let unearnedFutureInterest = 0;
-
-  if (loan.repaymentFrequency === "Daily") {
-    // Days-elapsed accrual for daily loans.
-    const lastPaid = [...loan.installments]
-      .filter((i) => i.status === "Paid" && i.paidDate)
-      .sort((a, b) => (b.paidDate ?? "").localeCompare(a.paidDate ?? ""))[0];
-
-    const fromDate = lastPaid?.paidDate ?? loan.disbursedDate ?? today;
-    const daysElapsed = Math.max(0, diffDays(fromDate, today));
-
-    const dailyRate = loan.interestRatePerAnnum / 100 / 365;
-    accruedInterestToDate = roundTo(
-      outstandingPrincipalBalance * dailyRate * daysElapsed,
-    );
-
-    const totalUnpaidInterest = roundTo(
-      loan.installments.reduce(
-        (s, i) => s + Math.max(0, i.interestAmount - (i.paidInterest ?? 0)),
-        0,
-      ),
-    );
-    unearnedFutureInterest = Math.max(
-      0,
-      roundTo(totalUnpaidInterest - accruedInterestToDate),
-    );
-  } else {
-    // Per-installment accrual for Monthly / Weekly / Bi-Weekly.
-    for (const inst of loan.installments) {
-      const unpaidInterest = roundTo(
-        inst.interestAmount - (inst.paidInterest ?? 0),
-      );
-      if (unpaidInterest <= 0) continue;
-      if (isBefore(inst.dueDate, today))
-        accruedInterestToDate += unpaidInterest;
-      else unearnedFutureInterest += unpaidInterest;
-    }
-  }
-
-  const penaltyPercent = loan.earlySettlementPenaltyPercent;
-  const penaltyFee = roundTo(
-    (outstandingPrincipalBalance * penaltyPercent) / 100,
-  );
   const totalSettlementAmount = roundTo(
-    outstandingPrincipalBalance + accruedInterestToDate + penaltyFee,
+    outstandingPrincipalBalance + outstandingInterest,
   );
 
   return {
@@ -550,11 +593,11 @@ export function calculateEarlySettlementQuote(
     originalPrincipal: roundTo(loan.disbursedAmount),
     principalPaidToDate,
     outstandingPrincipalBalance,
-    accruedInterestToDate: roundTo(accruedInterestToDate),
-    unearnedFutureInterestWaived: roundTo(unearnedFutureInterest),
-    earlySettlementPenaltyPercent: penaltyPercent,
-    earlySettlementPenaltyFee: penaltyFee,
+    accruedInterestToDate: outstandingInterest,
+    unearnedFutureInterestWaived: 0,
+    earlySettlementPenaltyPercent: 0,
+    earlySettlementPenaltyFee: 0,
     totalSettlementAmount,
-    totalSavingsForCustomer: roundTo(unearnedFutureInterest),
+    totalSavingsForCustomer: 0,
   };
 }
