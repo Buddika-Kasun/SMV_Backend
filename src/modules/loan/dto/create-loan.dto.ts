@@ -12,13 +12,14 @@ import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
 import { Optional } from "@nestjs/common";
 
 const LOAN_TYPES = [
-  "Instant_Personal",
+  "Instant_Loan_Daily",
+  "Instant_Loan_Monthly",
   "Standard_Personal",
   "Business_Expansion",
   "Micro_Enterprise",
   "Emergency_Quick",
 ];
-const FREQUENCIES = ["Monthly", "Bi-Weekly", "Weekly"];
+const FREQUENCIES = ["Daily", "Monthly", "Bi-Weekly", "Weekly"];
 const METHODS = ["Flat_Rate", "Reducing_Balance"];
 
 export class CreateLoanDto {

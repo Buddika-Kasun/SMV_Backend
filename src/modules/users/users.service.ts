@@ -4,7 +4,6 @@ import {
   Injectable,
   NotFoundException,
   InternalServerErrorException,
-  Inject,
 } from "@nestjs/common";
 import * as bcrypt from "bcryptjs";
 import { PrismaService } from "../../config/prisma.service";
@@ -15,6 +14,8 @@ import { CreateUserDto } from "./dto/create-user.dto";
 import { UpdateUserDto } from "./dto/update-user.dto";
 import { PaginationDto } from "../../common/dto/pagination.dto";
 import { PaginationService } from "../../common/services/pagination.service";
+import { EventBusService } from "../event/event-bus.service";
+import { AuthedUser } from "../../common/guards/auth.types";
 
 const SALT_ROUNDS = 10;
 
@@ -23,11 +24,11 @@ export class UsersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly paginationService: PaginationService,
+    private readonly eventBus: EventBusService,
   ) {}
 
   async findAll(paginationDto: PaginationDto) {
     try {
-      // Build where clause with search
       const where: any = {};
 
       if (paginationDto.search) {
@@ -38,22 +39,18 @@ export class UsersService {
         ];
       }
 
-      // Get pagination options
       const options = this.paginationService.getPaginationOptions(
         paginationDto,
         "createdAt",
         "desc",
       );
 
-      // Add role filter
       if (paginationDto.role) {
         where.role = paginationDto.role;
       }
 
-      // Get total count
       const total = await this.prisma.user.count({ where });
 
-      // Get paginated results
       const rows = await this.prisma.user.findMany({
         where,
         orderBy: { [options.sortBy]: options.sortOrder },
@@ -63,7 +60,6 @@ export class UsersService {
 
       const items = rows.map(this.toPublicUser);
 
-      // Return paginated response
       return this.paginationService.createPaginatedResponse(
         items,
         total,
@@ -72,13 +68,17 @@ export class UsersService {
       );
     } catch (error) {
       throw new InternalServerErrorException(
-        `Failed to retrieve users: ${error instanceof Error ? error.message : "Unknown error"}`,
+        `Failed to retrieve users: ${
+          error instanceof Error ? error.message : "Unknown error"
+        }`,
       );
     }
   }
 
-  // Other methods remain the same...
-  async create(input: CreateUserDto): Promise<Omit<User, "password">> {
+  async create(
+    input: CreateUserDto,
+    auth: AuthedUser,
+  ): Promise<Omit<User, "password">> {
     try {
       const existing = await this.prisma.user.findUnique({
         where: { username: input.username },
@@ -105,6 +105,16 @@ export class UsersService {
           phone: input.phone ?? null,
         },
       });
+
+      await this.eventBus.publish({
+        type: "users.changed",
+        payload: {
+          action: "created",
+          userId: row.id,
+          actorId: (auth as any).id ?? (auth as any).sub,
+        },
+      });
+
       return this.toPublicUser(row);
     } catch (error) {
       if (
@@ -114,7 +124,9 @@ export class UsersService {
         throw error;
       }
       throw new InternalServerErrorException(
-        `Failed to create user: ${error instanceof Error ? error.message : "Unknown error"}`,
+        `Failed to create user: ${
+          error instanceof Error ? error.message : "Unknown error"
+        }`,
       );
     }
   }
@@ -122,6 +134,7 @@ export class UsersService {
   async update(
     id: string,
     input: UpdateUserDto,
+    auth: AuthedUser,
   ): Promise<Omit<User, "password">> {
     try {
       const user = await this.prisma.user.findUnique({ where: { id } });
@@ -136,17 +149,51 @@ export class UsersService {
       }
 
       const data: Record<string, unknown> = {};
-      if (input.role !== undefined) data.role = input.role;
-      if (input.fullName !== undefined) data.fullName = input.fullName;
-      if (input.email !== undefined) data.email = input.email ?? null;
-      if (input.phone !== undefined) data.phone = input.phone ?? null;
-      if (input.designation !== undefined) data.designation = input.designation;
-      if (input.isActive !== undefined) data.isActive = input.isActive;
+      const changes: string[] = [];
+
+      if (input.role !== undefined) {
+        data.role = input.role;
+        if (input.role !== user.role) changes.push("role");
+      }
+      if (input.fullName !== undefined) {
+        data.fullName = input.fullName;
+        if (input.fullName !== user.fullName) changes.push("name");
+      }
+      if (input.email !== undefined) {
+        data.email = input.email ?? null;
+        if ((input.email ?? null) !== user.email) changes.push("email");
+      }
+      if (input.phone !== undefined) {
+        data.phone = input.phone ?? null;
+        if ((input.phone ?? null) !== user.phone) changes.push("phone");
+      }
+      if (input.designation !== undefined) {
+        data.designation = input.designation;
+        if (input.designation !== user.designation) changes.push("designation");
+      }
+      if (input.isActive !== undefined) {
+        data.isActive = input.isActive;
+        if (input.isActive !== user.isActive) {
+          changes.push(input.isActive ? "activated" : "deactivated");
+        }
+      }
       if (input.password !== undefined) {
         data.passwordHash = await bcrypt.hash(input.password, SALT_ROUNDS);
+        changes.push("password");
       }
 
       const updated = await this.prisma.user.update({ where: { id }, data });
+
+      await this.eventBus.publish({
+        type: "users.changed",
+        payload: {
+          action: "updated",
+          userId: updated.id,
+          actorId: (auth as any).id ?? (auth as any).sub,
+          changes,
+        },
+      });
+
       return this.toPublicUser(updated);
     } catch (error) {
       if (
@@ -156,12 +203,14 @@ export class UsersService {
         throw error;
       }
       throw new InternalServerErrorException(
-        `Failed to update user: ${error instanceof Error ? error.message : "Unknown error"}`,
+        `Failed to update user: ${
+          error instanceof Error ? error.message : "Unknown error"
+        }`,
       );
     }
   }
 
-  async remove(id: string): Promise<void> {
+  async remove(id: string, auth: AuthedUser): Promise<void> {
     try {
       const user = await this.prisma.user.findUnique({ where: { id } });
       if (!user) {
@@ -178,6 +227,21 @@ export class UsersService {
           );
         }
       }
+
+      await this.eventBus.publish({
+        type: "users.changed",
+        payload: {
+          action: "deleted",
+          userId: user.id,
+          actorId: (auth as any).id ?? (auth as any).sub,
+          snapshot: {
+            fullName: user.fullName,
+            username: user.username,
+            role: user.role,
+          },
+        },
+      });
+
       await this.prisma.user.delete({ where: { id } });
     } catch (error) {
       if (
@@ -187,7 +251,9 @@ export class UsersService {
         throw error;
       }
       throw new InternalServerErrorException(
-        `Failed to delete user: ${error instanceof Error ? error.message : "Unknown error"}`,
+        `Failed to delete user: ${
+          error instanceof Error ? error.message : "Unknown error"
+        }`,
       );
     }
   }
@@ -230,13 +296,20 @@ export class UsersService {
         createdUsers.push(result);
       }
 
+      await this.eventBus.publish({
+        type: "users.changed",
+        payload: { action: "reset" },
+      });
+
       return createdUsers.map(this.toPublicUser);
     } catch (error) {
       if (error instanceof BadRequestException) {
         throw error;
       }
       throw new InternalServerErrorException(
-        `Failed to reset defaults: ${error instanceof Error ? error.message : "Unknown error"}`,
+        `Failed to reset defaults: ${
+          error instanceof Error ? error.message : "Unknown error"
+        }`,
       );
     }
   }
@@ -264,7 +337,9 @@ export class UsersService {
         throw error;
       }
       throw new InternalServerErrorException(
-        `Failed to validate admin constraint: ${error instanceof Error ? error.message : "Unknown error"}`,
+        `Failed to validate admin constraint: ${
+          error instanceof Error ? error.message : "Unknown error"
+        }`,
       );
     }
   }

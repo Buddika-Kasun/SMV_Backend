@@ -12,6 +12,9 @@ import { CustomersModule } from './modules/customer/customers.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { HealthController } from './modules/health/health.controller';
 import { ScheduleModule } from '@nestjs/schedule';
+import { EventsModule } from './modules/event/events.module';
+import { RedisModule } from './config/redis.module';
+import { NotificationsModule } from './modules/notifications/notifications.module';
 
 @Module({
   imports: [
@@ -27,6 +30,9 @@ import { ScheduleModule } from '@nestjs/schedule';
     SmsModule,
     ReportsModule,
     DashboardModule,
+    RedisModule,
+    EventsModule,
+    NotificationsModule,
   ],
   controllers: [HealthController],
 })

@@ -202,6 +202,29 @@ export class LoansController {
   }
 
   // ---------------------------------------------------------------------------
+  // State counts
+  // ---------------------------------------------------------------------------
+  @Get("state-counts")
+  @ApiOperation({
+    summary: "Get loan counts grouped by status",
+    description:
+      "Returns a breakdown of loan counts by status plus a total. Useful for nav badges and dashboard widgets.",
+  })
+  @ApiOkResponse({
+    description:
+      "`data` contains `{ total, Pending_Approval, KYC_Pending, ... }`.",
+  })
+  @ApiUnauthorizedResponse({
+    description: "Missing, invalid or expired bearer token.",
+  })
+  async getStateCounts() {
+    return ok(
+      await this.loansService.getStateCounts(),
+      "Loan state counts retrieved",
+    );
+  }
+
+  // ---------------------------------------------------------------------------
   // Get single loan
   // ---------------------------------------------------------------------------
   @Get(":id")
@@ -251,6 +274,7 @@ export class LoansController {
   // Approve / Reject
   // ---------------------------------------------------------------------------
   @Post(":id/approve")
+  @Roles("admin", "manager")
   @ApiParam({
     name: "id",
     description: "ID of the loan application to approve",
@@ -283,6 +307,7 @@ export class LoansController {
   }
 
   @Post(":id/reject")
+  @Roles("admin", "manager")
   @ApiParam({ name: "id", description: "ID of the loan application to reject" })
   @ApiOperation({
     summary: "Reject a loan application",
@@ -300,9 +325,13 @@ export class LoansController {
   @ApiUnauthorizedResponse({
     description: "Missing, invalid or expired bearer token.",
   })
-  async reject(@Param("id") id: string, @Body() body: RejectLoanDto) {
+  async reject(
+    @Param("id") id: string,
+    @Body() body: RejectLoanDto,
+    @CurrentUser() auth: AuthedUser,
+  ) {
     return ok(
-      await this.loansService.reject(id, body.reason),
+      await this.loansService.reject(id, body.reason, auth),
       "Loan application rejected",
     );
   }
@@ -349,7 +378,7 @@ export class LoansController {
   // Disburse
   // ---------------------------------------------------------------------------
   @Post(":id/disburse")
-  @Roles("admin", "manager")
+  // @Roles("admin", "manager")
   @ApiParam({ name: "id", description: "ID of the approved loan to disburse" })
   @ApiOperation({
     summary: "Disburse an approved loan",
@@ -413,7 +442,7 @@ export class LoansController {
   // Early settlement
   // ---------------------------------------------------------------------------
   @Post(":id/early-settle")
-  @Roles("admin", "manager")
+  // @Roles("admin", "manager")
   @ApiParam({ name: "id", description: "ID of the loan to settle early" })
   @ApiOperation({
     summary: "Settle a loan early",

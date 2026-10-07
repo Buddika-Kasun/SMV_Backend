@@ -119,4 +119,16 @@ export class ExecuteSettlementDto {
   @IsOptional()
   @IsString()
   settlementDate?: string;
+
+  @ApiPropertyOptional({
+    description:
+      "Manual reduction amount subtracted from the computed payoff (e.g. negotiated waiver). Defaults to 0.",
+    example: 5000,
+    minimum: 0,
+    default: 0,
+  })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  reductionAmount?: number;
 }
