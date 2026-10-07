@@ -109,6 +109,7 @@ export interface KYCPayload {
     };
     guarantor: {
       fullName: string;
+      idNumber?: string;
       phone: string;
       relation: string;
     };

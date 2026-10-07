@@ -63,6 +63,7 @@ model Guarantor {
   loanId          String    @map("loan_id") @unique
   customerId      String?   @map("customer_id")
   fullName        String    @map("full_name")
+  idNumber        String?
   phone           String
   email           String?
   relation        String?
