@@ -10,6 +10,7 @@ import { EventBusService, AppEvent } from "../event/event-bus.service";
 import { config } from "../../config/env";
 
 const ALL_ROLES = ["admin", "manager", "staff"] as const;
+const STAFF_ONLY = ["staff"] as const;
 const ADMINS_MANAGERS = ["admin", "manager"] as const;
 
 @Injectable()
@@ -168,7 +169,7 @@ export class NotificationListenerService
       minimumFractionDigits: 2,
     });
 
-    const recipients = await this.collectRecipients(ADMINS_MANAGERS, [
+    const recipients = await this.collectRecipients(STAFF_ONLY, [
       officerId,
     ]);
 
@@ -179,8 +180,8 @@ export class NotificationListenerService
         type: "loan.created",
         title: isActor ? "Loan Application Submitted" : "New Loan Application",
         body: isActor
-          ? `You submitted loan application ${loan.loanNumber} for ${loan.customer.fullName} (LKR ${amountFmt}). Waiting for manager approval.`
-          : `${officerName} (${officerRole}) submitted loan application ${loan.loanNumber} for ${loan.customer.fullName} (LKR ${amountFmt}). Waiting for manager approval.`,
+          ? `You submitted loan application ${loan.loanNumber} for ${loan.customer.fullName} (LKR ${amountFmt}). Waiting for KYC.`
+          : `${officerName} (${officerRole}) submitted loan application ${loan.loanNumber} for ${loan.customer.fullName} (LKR ${amountFmt}). Waiting for KYC.`,
         data: { loanId },
         dedupeKey: `loan.created:${loanId}:${u.id}`,
       };
@@ -216,8 +217,8 @@ export class NotificationListenerService
         type: "loan.approved",
         title: `${loan.loanNumber} Loan Approved`,
         body: isActor
-          ? `You approved loan ${loan.loanNumber} for ${loan.customer.fullName} (LKR ${amountFmt}). KYC step is next.`
-          : `${actorName} (${actorRole}) approved loan ${loan.loanNumber} for ${loan.customer.fullName} (LKR ${amountFmt}). KYC step is next.`,
+          ? `You approved loan ${loan.loanNumber} for ${loan.customer.fullName} (LKR ${amountFmt}). Disbursement step is next.`
+          : `${actorName} (${actorRole}) approved loan ${loan.loanNumber} for ${loan.customer.fullName} (LKR ${amountFmt}). Disbursement step is next.`,
         data: { loanId },
         dedupeKey: `loan.approved:${loanId}:${u.id}`,
       };
@@ -285,8 +286,8 @@ export class NotificationListenerService
         type: "kyc.completed",
         title: `${loan.loanNumber} KYC Updated`,
         body: isActor
-          ? `You updated KYC data for loan ${loan.loanNumber} (${loan.customer.fullName}).`
-          : `${actorName} (${actorRole}) updated KYC data for loan ${loan.loanNumber} (${loan.customer.fullName}).`,
+          ? `You updated KYC data for loan ${loan.loanNumber} (${loan.customer.fullName}). Awaiting manager approval.`
+          : `${actorName} (${actorRole}) updated KYC data for loan ${loan.loanNumber} (${loan.customer.fullName}). Awaiting manager approval.`,
         data: { loanId },
         dedupeKey: `kyc.updated:${loanId}:${u.id}`,
       };
