@@ -441,7 +441,8 @@ export class LoansService {
           processingFee: Math.round(input.requestedAmount * 0.02),
           earlySettlementPenaltyPercent: 2.5,
           purpose: input.purpose,
-          status: "Pending_Approval",
+          // status: "Pending_Approval",
+          status: "KYC_Pending",
           requestedDate: new Date(today),
           totalPaidAmount: 0,
           outstandingBalance: input.requestedAmount,
@@ -518,7 +519,8 @@ export class LoansService {
     const updated = await this.prisma.loan.update({
       where: { id },
       data: {
-        status: "KYC_Pending",
+        // status: "KYC_Pending",
+        status: "Approved_Pending_Disbursement",
         approvedDate: new Date(),
         approvedById: (auth as any).sub || (auth as any).id,
       },
@@ -747,6 +749,8 @@ export class LoansService {
 
     if (rawGuarantor.fullName !== undefined)
       guarantorUpdate.fullName = rawGuarantor.fullName;
+    if (rawGuarantor.idNumber !== undefined)
+      guarantorUpdate.idNumber = rawGuarantor.idNumber;
     if (rawGuarantor.phone !== undefined)
       guarantorUpdate.phone = rawGuarantor.phone;
     if (rawGuarantor.relation !== undefined)
@@ -757,7 +761,8 @@ export class LoansService {
     // -------- Determine new status --------
     let newStatus = loan.status;
     if (loan.status === "KYC_Pending" && hasCoreKyc) {
-      newStatus = "Approved_Pending_Disbursement";
+      // newStatus = "Approved_Pending_Disbursement";
+      newStatus = "Pending_Approval";
     }
 
     // -------- Run everything in a single transaction --------
@@ -783,6 +788,7 @@ export class LoansService {
               loanId: loan.id,
               customerId: loan.customer.id,
               fullName: (guarantorUpdate.fullName as string) ?? "",
+              idNumber: (guarantorUpdate.idNumber as string) ?? "",
               phone: (guarantorUpdate.phone as string) ?? "",
               relation: (guarantorUpdate.relation as string) ?? "Relative",
             },
@@ -795,8 +801,10 @@ export class LoansService {
         where: { id },
         data: {
           status: newStatus,
-          ...(newStatus === "Approved_Pending_Disbursement" &&
-            loan.status !== "Approved_Pending_Disbursement" && {
+          // ...(newStatus === "Approved_Pending_Disbursement" &&
+          //   loan.status !== "Approved_Pending_Disbursement" && {
+          ...(newStatus === "Pending_Approval" &&
+            loan.status !== "Pending_Approval" && {
               approvedDate: new Date(),
             }),
         },
