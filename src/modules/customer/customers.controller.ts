@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, Param, Post, Query, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, HttpCode, Param, Patch, Post, Query, UseGuards } from "@nestjs/common";
 import {
   ApiBadRequestResponse,
   ApiBearerAuth,
@@ -17,6 +17,7 @@ import { PaginationDto } from "../../common/dto/pagination.dto";
 import { PaginationService } from "../../common/services/pagination.service";
 import { CustomersService } from "./customers.service";
 import { SendPhoneOtpDto, VerifyPhoneOtpDto } from "./dto/verify-phone.dto";
+import { UpdateCustomerDto } from "./dto/update-customer.dto";
 
 @ApiTags("Customers")
 @ApiBearerAuth()
@@ -162,5 +163,21 @@ export class CustomersController {
   })
   async getOne(@Param("id") id: string) {
     return ok(await this.customersService.getOne(id), "Customer retrieved");
+  }
+
+  @Patch(":id")
+  @ApiParam({ name: "id", description: "ID of the customer" })
+  @ApiOperation({
+    summary: "Update an existing customer",
+    description:
+      "Updates any of: idNumber, idType, fullName, phone, email, dateOfBirth, gender, occupation, employerName, monthlyIncome, addressLine, city. customerNumber, isVerified, and timestamps are never changed.",
+  })
+  @ApiOkResponse({ description: "Customer updated successfully." })
+  @ApiBadRequestResponse({ description: "Invalid body." })
+  @ApiNotFoundResponse({
+    description: "No customer exists with the given `id`.",
+  })
+  async update(@Param("id") id: string, @Body() body: UpdateCustomerDto) {
+    return ok(await this.customersService.update(id, body), "Customer updated");
   }
 }
