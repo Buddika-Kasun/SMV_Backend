@@ -450,11 +450,14 @@ export class LoansService {
         select: { id: true },
       });
 
+      const totalInterest = schedule.totalInterest;
+
       // ---- Create the account row ----
       const account = await tx.loanAccount.create({
         data: {
           accountNumber: accNo,
           disbursedAmount: 0,
+          interestAmount: totalInterest,
           totalCollected: 0,
           remainingBalance: 0,
         },
@@ -1249,13 +1252,17 @@ export class LoansService {
         });
       }
 
+      const totalInterest = schedule.totalInterest;
+      const totalPayable = disbursedAmount + totalInterest;
+
       // ---- Update / create linked account ----
       if (loan.accountId) {
         await tx.loanAccount.update({
           where: { id: loan.accountId },
           data: {
-            disbursedAmount,
-            remainingBalance: disbursedAmount,
+            disbursedAmount: disbursedAmount,
+            interestAmount: totalInterest,
+            remainingBalance: totalPayable, // reset since not paid yet
           },
         });
       } else {
@@ -1263,9 +1270,10 @@ export class LoansService {
         const account = await tx.loanAccount.create({
           data: {
             accountNumber: loan.accountNumber,
-            disbursedAmount,
+            disbursedAmount: disbursedAmount,
+            interestAmount: totalInterest,
             totalCollected: 0,
-            remainingBalance: disbursedAmount,
+            remainingBalance: totalPayable,
           },
         });
         await tx.loan.update({
@@ -2164,7 +2172,8 @@ export class LoansService {
 
       // Totals
       totalPaidAmount: Number(loan.totalPaidAmount),
-      outstandingBalance: Number(loan.outstandingBalance),
+      totalInterest: Number(loan.account?.interestAmount ?? loan.totalInterest),
+      outstandingBalance: Number(loan.account?.remainingBalance ?? loan.outstandingBalance),
 
       // Next Due
       nextDueDate,
@@ -2205,8 +2214,11 @@ export class LoansService {
       requestedAmount: Number(loan.requestedAmount),
       disbursedAmount: Number(loan.disbursedAmount),
       interestRatePerAnnum: Number(loan.interestRatePerAnnum),
+      totalInterest: Number(loan.account?.interestAmount ?? loan.totalInterest),
       totalPaidAmount: Number(loan.totalPaidAmount),
-      outstandingBalance: Number(loan.outstandingBalance),
+      outstandingBalance: Number(
+        loan.account?.remainingBalance ?? loan.outstandingBalance,
+      ),
       processingFee: Number(loan.processingFee),
       earlySettlementPenaltyPercent: Number(loan.earlySettlementPenaltyPercent),
       nextDueDate,
