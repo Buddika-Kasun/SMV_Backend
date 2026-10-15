@@ -14,6 +14,8 @@ import { createHash, randomInt } from "crypto";
 import { smsRecipient } from "../../common/utils/phone";
 import { SendPhoneOtpDto, VerifyPhoneOtpDto } from "./dto/verify-phone.dto";
 import { config } from "../../config/env";
+import { UpdateCustomerDto } from "./dto/update-customer.dto";
+import { Prisma } from "@prisma/client";
 
 /** How long an OTP is valid for. */
 const OTP_TTL_MINUTES = 15;
@@ -424,5 +426,35 @@ export class CustomersService {
           createdAt: l.createdAt.toISOString(),
         })) || [],
     };
+  }
+
+  async update(id: string, dto: UpdateCustomerDto): Promise<any> {
+    const existing = await this.prisma.customer.findUnique({ where: { id } });
+    if (!existing) throw new NotFoundException("Customer not found");
+
+    // Whitelist only the mutable fields. Never trust the client to send
+    // customerNumber, isVerified, or timestamps.
+    const data: Prisma.CustomerUpdateInput = {};
+
+    if (dto.idNumber !== undefined) data.idNumber = dto.idNumber;
+    if (dto.idType !== undefined) data.idType = dto.idType;
+    if (dto.fullName !== undefined) data.fullName = dto.fullName;
+    if (dto.phone !== undefined) data.phone = dto.phone;
+    if (dto.email !== undefined) data.email = dto.email || null;
+    if (dto.dateOfBirth !== undefined)
+      data.dateOfBirth = dto.dateOfBirth ? new Date(dto.dateOfBirth) : null;
+    if (dto.gender !== undefined) data.gender = dto.gender;
+    if (dto.occupation !== undefined) data.occupation = dto.occupation;
+    if (dto.employerName !== undefined) data.employerName = dto.employerName;
+    if (dto.monthlyIncome !== undefined) data.monthlyIncome = dto.monthlyIncome;
+    if (dto.addressLine !== undefined) data.addressLine = dto.addressLine;
+    if (dto.city !== undefined) data.city = dto.city;
+
+    const updated = await this.prisma.customer.update({
+      where: { id },
+      data,
+    });
+
+    return this.formatCustomerResponse(updated);
   }
 }
