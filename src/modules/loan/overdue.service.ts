@@ -12,6 +12,12 @@ const SMS_REMINDER_INTERVAL_DAYS = 7;
 /** Marker embedded in the SMS body so we can identify overdue reminders. */
 const OVERDUE_SMS_MARKER = "overdue installment";
 
+/** Annual penalty rate (%) by repayment frequency. */
+const PENALTY_RATE_DAILY = 5 * 12;
+const PENALTY_RATE_OTHER = 10 * 12;
+
+const MS_PER_DAY = 1000 * 60 * 60 * 24;
+
 type OverdueProcessResult = "no_change" | "marked_overdue" | "reverted_active";
 
 @Injectable()
@@ -69,6 +75,159 @@ export class OverdueService {
       type: "stats.changed",
       payload: { source: "overdue-cron", marked, reverted, smsSent },
     });
+  }
+
+  // ---------------------------------------------------------------------------
+  // Cron 2 — Daily penalty accrual (07:05 Asia/Colombo, right after Cron 1)
+  // ---------------------------------------------------------------------------
+  @Cron("5 7 * * *", {
+    name: "overdue-penalty-accrual",
+    timeZone: "Asia/Colombo",
+  })
+  async handlePenaltyAccrual(): Promise<void> {
+    this.logger.log("Running daily penalty accrual...");
+
+    const today = todayISO();
+    const todayDate = new Date(today + "T00:00:00Z");
+
+    const overdueLoans = await this.prisma.loan.findMany({
+      where: { status: "Overdue" },
+      include: {
+        installments: {
+          orderBy: { installmentNumber: "asc" },
+        },
+      },
+    });
+
+    this.logger.log(`Processing ${overdueLoans.length} overdue loan(s)`);
+
+    let updated = 0;
+
+    for (const loan of overdueLoans) {
+      try {
+        const didUpdate = await this.accruePenaltyForLoan(loan, todayDate);
+        if (didUpdate) updated++;
+      } catch (err) {
+        this.logger.error(
+          `Penalty accrual failed for ${loan.loanNumber}: ${err}`,
+        );
+      }
+    }
+
+    this.logger.log(`Penalty accrual complete. Updated: ${updated}`);
+
+    if (updated > 0) {
+      await this.eventBus.publish({
+        type: "loans.changed",
+        payload: {
+          action: "penalty_accrued",
+          updated,
+          source: "penalty-cron",
+        },
+      });
+      await this.eventBus.publish({
+        type: "stats.changed",
+        payload: { source: "penalty-cron", updated },
+      });
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Compute + persist penalty for one loan
+  // ---------------------------------------------------------------------------
+  private async accruePenaltyForLoan(
+    loan: any,
+    todayDate: Date,
+  ): Promise<boolean> {
+    const todayISOStr = todayDate.toISOString().slice(0, 10);
+
+    // Overdue installments only
+    const overdueInstallments = loan.installments.filter(
+      (inst: any) =>
+        inst.status !== "Paid" &&
+        Number(inst.remainingAmount) > 0 &&
+        new Date(inst.dueDate).toISOString().slice(0, 10) < todayISOStr,
+    );
+
+    // -------------------------------------------------------------------------
+    // Sum of penalty already paid for this loan (from the ledger).
+    // This is the amount we must NOT re-charge the customer.
+    // -------------------------------------------------------------------------
+    const paidRow = await this.prisma.penaltyPayment.aggregate({
+      where: { loanId: loan.id },
+      _sum: { paidAmount: true },
+    });
+    const totalPenaltyPaid = roundTo(Number(paidRow._sum.paidAmount ?? 0));
+
+    // -------------------------------------------------------------------------
+    // No overdue installments — clear any remaining penalty.
+    // If everything was already paid, penaltyAmount is already 0.
+    // -------------------------------------------------------------------------
+    if (overdueInstallments.length === 0) {
+      if (Number(loan.penaltyAmount) > 0) {
+        await this.prisma.loan.update({
+          where: { id: loan.id },
+          data: { penaltyAmount: 0, penaltyLastAccrued: todayDate },
+        });
+        return true;
+      }
+      return false;
+    }
+
+    // Total due = remaining of overdue installments
+    const totalDue = roundTo(
+      overdueInstallments.reduce(
+        (sum: number, inst: any) => sum + Number(inst.remainingAmount),
+        0,
+      ),
+    );
+
+    // Days overdue from the earliest overdue due date
+    const earliestDueMs = overdueInstallments
+      .map((i: any) => new Date(i.dueDate).getTime())
+      .sort((a: number, b: number) => a - b)[0];
+
+    const daysOverdue = Math.max(
+      0,
+      Math.floor((todayDate.getTime() - earliestDueMs) / MS_PER_DAY),
+    );
+
+    // Rate: 5% p.a. for Daily, 10% p.a. for others
+    const annualRate =
+      loan.repaymentFrequency === "Daily"
+        ? PENALTY_RATE_DAILY
+        : PENALTY_RATE_OTHER;
+
+    // Raw penalty accrued so far (before subtracting paid amounts)
+    const rawAccruedPenalty = roundTo(
+      ((totalDue * (annualRate / 100)) / 365) * daysOverdue,
+    );
+
+    // Net penalty owed = raw accrued − already paid (never below zero)
+    const penalty = roundTo(Math.max(0, rawAccruedPenalty - totalPenaltyPaid));
+
+    const currentPenalty = roundTo(Number(loan.penaltyAmount ?? 0));
+
+    if (Math.abs(penalty - currentPenalty) < 0.01) {
+      return false;
+    }
+
+    await this.prisma.loan.update({
+      where: { id: loan.id },
+      data: {
+        penaltyAmount: penalty,
+        penaltyLastAccrued: todayDate,
+      },
+    });
+
+    this.logger.log(
+      `Loan ${loan.loanNumber}: penalty ${currentPenalty} → ${penalty} ` +
+        `(raw ${rawAccruedPenalty}, paid ${totalPenaltyPaid}, ` +
+        `${overdueInstallments.length} overdue, ${daysOverdue}d, ` +
+        `rate ${annualRate}%, totalDue ${totalDue})`,
+    );
+
+    return true;
   }
 
   // ---------------------------------------------------------------------------
@@ -306,6 +465,8 @@ export class OverdueService {
       else if (result.status === "reverted_active") reverted++;
       if (result.smsSent) smsSent++;
     }
+
+    await this.handlePenaltyAccrual();
 
     await this.eventBus.publish({
       type: "stats.changed",
