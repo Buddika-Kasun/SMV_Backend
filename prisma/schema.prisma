@@ -79,6 +79,7 @@ model LoanAccount {
   id                 String    @id @default(uuid())
   accountNumber      String    @unique @map("account_number")
   disbursedAmount    Decimal   @default(0) @map("disbursed_amount") @db.Decimal(15,2)
+  interestAmount     Decimal   @default(0) @map("interest_amount") @db.Decimal(15,2)
   totalCollected     Decimal   @default(0) @map("total_collected") @db.Decimal(15,2)
   remainingBalance   Decimal   @default(0) @map("remaining_balance") @db.Decimal(15,2)
   createdAt          DateTime  @default(now()) @map("created_at")
