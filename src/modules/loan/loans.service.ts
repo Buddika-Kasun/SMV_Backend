@@ -209,7 +209,7 @@ export class LoansService {
         approvedBy: true,
         disbursedBy: true,
         payments: {
-          orderBy: { createdAt: "desc" },
+          orderBy: { paymentDate: "desc" },
           include: { receivedBy: true },
         },
         penaltyPayments: true,
