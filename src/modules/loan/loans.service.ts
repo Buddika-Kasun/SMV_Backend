@@ -212,6 +212,7 @@ export class LoansService {
           orderBy: { createdAt: "desc" },
           include: { receivedBy: true },
         },
+        penaltyPayments: true,
       },
     });
 
@@ -1345,242 +1346,242 @@ export class LoansService {
     await this.prisma.loan.delete({ where: { id } });
   }
 
-  async receivePayment(id: string, dto: RecordPaymentDto): Promise<any> {
-    const loan = await this.prisma.loan.findUnique({
-      where: { id },
-      include: {
-        customer: true,
-        account: true,
-        installments: { orderBy: { installmentNumber: "asc" } },
-        payments: { orderBy: { createdAt: "desc" } },
-      },
-    });
+  // async receivePayment(id: string, dto: RecordPaymentDto): Promise<any> {
+  //   const loan = await this.prisma.loan.findUnique({
+  //     where: { id },
+  //     include: {
+  //       customer: true,
+  //       account: true,
+  //       installments: { orderBy: { installmentNumber: "asc" } },
+  //       payments: { orderBy: { createdAt: "desc" } },
+  //     },
+  //   });
 
-    if (!loan) throw new NotFoundException("Loan not found");
+  //   if (!loan) throw new NotFoundException("Loan not found");
 
-    // Payments are only accepted on disbursed loans
-    const payableStatuses = ["Active", "Overdue"];
-    if (!payableStatuses.includes(loan.status)) {
-      throw new BadRequestException(
-        "Payments are only accepted on Active or Overdue loans",
-      );
-    }
+  //   // Payments are only accepted on disbursed loans
+  //   const payableStatuses = ["Active", "Overdue"];
+  //   if (!payableStatuses.includes(loan.status)) {
+  //     throw new BadRequestException(
+  //       "Payments are only accepted on Active or Overdue loans",
+  //     );
+  //   }
 
-    const refDate = dto.paymentDate ? dto.paymentDate.slice(0, 10) : todayISO();
-    const amount = roundTo(dto.amount);
+  //   const refDate = dto.paymentDate ? dto.paymentDate.slice(0, 10) : todayISO();
+  //   const amount = roundTo(dto.amount);
 
-    if (amount <= 0) {
-      throw new BadRequestException("Payment amount must be greater than zero");
-    }
+  //   if (amount <= 0) {
+  //     throw new BadRequestException("Payment amount must be greater than zero");
+  //   }
 
-    // Build the installment view the allocator expects
-    const installmentsForAlloc = loan.installments.map((inst) => ({
-      installmentNumber: inst.installmentNumber,
-      dueDate: inst.dueDate.toISOString().slice(0, 10),
-      principalAmount: Number(inst.principalAmount),
-      interestAmount: Number(inst.interestAmount),
-      totalInstallment: Number(inst.totalInstallment),
-      paidAmount: Number(inst.paidAmount),
-      remainingAmount: Number(inst.remainingAmount),
-      status: inst.status,
-      lateFee: Number(inst.lateFee),
-      paidPrincipal: Number(inst.paidPrincipal) || 0,
-      paidInterest: Number(inst.paidInterest) || 0,
-      lateFeePaid: Number(inst.lateFeePaid) || 0,
-    }));
+  //   // Build the installment view the allocator expects
+  //   const installmentsForAlloc = loan.installments.map((inst) => ({
+  //     installmentNumber: inst.installmentNumber,
+  //     dueDate: inst.dueDate.toISOString().slice(0, 10),
+  //     principalAmount: Number(inst.principalAmount),
+  //     interestAmount: Number(inst.interestAmount),
+  //     totalInstallment: Number(inst.totalInstallment),
+  //     paidAmount: Number(inst.paidAmount),
+  //     remainingAmount: Number(inst.remainingAmount),
+  //     status: inst.status,
+  //     lateFee: Number(inst.lateFee),
+  //     paidPrincipal: Number(inst.paidPrincipal) || 0,
+  //     paidInterest: Number(inst.paidInterest) || 0,
+  //     lateFeePaid: Number(inst.lateFeePaid) || 0,
+  //   }));
 
-    // Shape the loan the way `allocatePayment` expects
-    const loanLike = {
-      id: loan.id,
-      accountNumber: loan.accountNumber,
-      customerName: loan.customer.fullName,
-      customerPhone: loan.customer.phone,
-      customerEmail: loan.customer.email || "",
-      loanType: loan.loanType,
-      requestedAmount: Number(loan.requestedAmount),
-      disbursedAmount: Number(loan.disbursedAmount),
-      interestRatePerAnnum: Number(loan.interestRatePerAnnum),
-      termMonths: loan.termMonths,
-      repaymentFrequency: loan.repaymentFrequency,
-      interestMethod: loan.interestMethod,
-      processingFee: Number(loan.processingFee),
-      earlySettlementPenaltyPercent: Number(loan.earlySettlementPenaltyPercent),
-      status: loan.status,
-      requestedDate: loan.requestedDate.toISOString(),
-      installments: installmentsForAlloc,
-      payments: loan.payments || [],
-      totalPaidAmount: Number(loan.totalPaidAmount),
-      outstandingBalance: Number(loan.outstandingBalance),
-      purpose: loan.purpose || "",
-      creditScore: 0,
-      kyc: null as any,
-    };
+  //   // Shape the loan the way `allocatePayment` expects
+  //   const loanLike = {
+  //     id: loan.id,
+  //     accountNumber: loan.accountNumber,
+  //     customerName: loan.customer.fullName,
+  //     customerPhone: loan.customer.phone,
+  //     customerEmail: loan.customer.email || "",
+  //     loanType: loan.loanType,
+  //     requestedAmount: Number(loan.requestedAmount),
+  //     disbursedAmount: Number(loan.disbursedAmount),
+  //     interestRatePerAnnum: Number(loan.interestRatePerAnnum),
+  //     termMonths: loan.termMonths,
+  //     repaymentFrequency: loan.repaymentFrequency,
+  //     interestMethod: loan.interestMethod,
+  //     processingFee: Number(loan.processingFee),
+  //     earlySettlementPenaltyPercent: Number(loan.earlySettlementPenaltyPercent),
+  //     status: loan.status,
+  //     requestedDate: loan.requestedDate.toISOString(),
+  //     installments: installmentsForAlloc,
+  //     payments: loan.payments || [],
+  //     totalPaidAmount: Number(loan.totalPaidAmount),
+  //     outstandingBalance: Number(loan.outstandingBalance),
+  //     purpose: loan.purpose || "",
+  //     creditScore: 0,
+  //     kyc: null as any,
+  //   };
 
-    // Run the allocation engine
-    const alloc = allocatePayment(loanLike, amount, refDate);
+  //   // Run the allocation engine
+  //   const alloc = allocatePayment(loanLike, amount, refDate);
 
-    // Compute the new loan totals
-    const newTotalPaid = Number(loan.totalPaidAmount) + amount;
-    const newOutstanding = Math.max(
-      0,
-      Number(loan.outstandingBalance) - amount,
-    );
-    const isFullySettled = newOutstanding <= 0;
-    // Determine post-payment status
-    const hasRemainingOverdue = installmentsForAlloc.some(
-      (inst) =>
-        inst.status !== "Paid" &&
-        inst.remainingAmount > 0 &&
-        new Date(inst.dueDate).getTime() < new Date(refDate).getTime(),
-    );
+  //   // Compute the new loan totals
+  //   const newTotalPaid = Number(loan.totalPaidAmount) + amount;
+  //   const newOutstanding = Math.max(
+  //     0,
+  //     Number(loan.outstandingBalance) - amount,
+  //   );
+  //   const isFullySettled = newOutstanding <= 0;
+  //   // Determine post-payment status
+  //   const hasRemainingOverdue = installmentsForAlloc.some(
+  //     (inst) =>
+  //       inst.status !== "Paid" &&
+  //       inst.remainingAmount > 0 &&
+  //       new Date(inst.dueDate).getTime() < new Date(refDate).getTime(),
+  //   );
 
-    let nextStatus: string;
-    if (isFullySettled) {
-      nextStatus = "Settled";
-    } else if (hasRemainingOverdue) {
-      nextStatus = "Overdue";
-    } else {
-      // No overdue installments left — but only downgrade if it was Overdue
-      nextStatus = loan.status === "Overdue" ? "Active" : loan.status;
-    }
+  //   let nextStatus: string;
+  //   if (isFullySettled) {
+  //     nextStatus = "Settled";
+  //   } else if (hasRemainingOverdue) {
+  //     nextStatus = "Overdue";
+  //   } else {
+  //     // No overdue installments left — but only downgrade if it was Overdue
+  //     nextStatus = loan.status === "Overdue" ? "Active" : loan.status;
+  //   }
 
-    // ---------- Run everything in a transaction ----------
-    let createdPaymentId = "";
+  //   // ---------- Run everything in a transaction ----------
+  //   let createdPaymentId = "";
 
-    await this.prisma.$transaction(async (tx) => {
-      // 1. Update each affected installment
-      for (const inst of loan.installments) {
-        const updatedInst = installmentsForAlloc.find(
-          (i) => i.installmentNumber === inst.installmentNumber,
-        );
-        if (!updatedInst) continue;
+  //   await this.prisma.$transaction(async (tx) => {
+  //     // 1. Update each affected installment
+  //     for (const inst of loan.installments) {
+  //       const updatedInst = installmentsForAlloc.find(
+  //         (i) => i.installmentNumber === inst.installmentNumber,
+  //       );
+  //       if (!updatedInst) continue;
 
-        // Only write if something changed (avoids pointless updates)
-        const changed =
-          updatedInst.paidAmount !== Number(inst.paidAmount) ||
-          updatedInst.remainingAmount !== Number(inst.remainingAmount) ||
-          updatedInst.status !== inst.status ||
-          updatedInst.paidPrincipal !== (Number(inst.paidPrincipal) || 0) ||
-          updatedInst.paidInterest !== (Number(inst.paidInterest) || 0) ||
-          updatedInst.lateFeePaid !== (Number(inst.lateFeePaid) || 0);
+  //       // Only write if something changed (avoids pointless updates)
+  //       const changed =
+  //         updatedInst.paidAmount !== Number(inst.paidAmount) ||
+  //         updatedInst.remainingAmount !== Number(inst.remainingAmount) ||
+  //         updatedInst.status !== inst.status ||
+  //         updatedInst.paidPrincipal !== (Number(inst.paidPrincipal) || 0) ||
+  //         updatedInst.paidInterest !== (Number(inst.paidInterest) || 0) ||
+  //         updatedInst.lateFeePaid !== (Number(inst.lateFeePaid) || 0);
 
-        if (!changed) continue;
+  //       if (!changed) continue;
 
-        await tx.installment.update({
-          where: { id: inst.id },
-          data: {
-            paidAmount: updatedInst.paidAmount,
-            remainingAmount: updatedInst.remainingAmount,
-            status: updatedInst.status,
-            paidPrincipal: updatedInst.paidPrincipal || 0,
-            paidInterest: updatedInst.paidInterest || 0,
-            lateFeePaid: updatedInst.lateFeePaid || 0,
-            paidDate:
-              updatedInst.status === "Paid" ? new Date(refDate) : undefined,
-          },
-        });
-      }
+  //       await tx.installment.update({
+  //         where: { id: inst.id },
+  //         data: {
+  //           paidAmount: updatedInst.paidAmount,
+  //           remainingAmount: updatedInst.remainingAmount,
+  //           status: updatedInst.status,
+  //           paidPrincipal: updatedInst.paidPrincipal || 0,
+  //           paidInterest: updatedInst.paidInterest || 0,
+  //           lateFeePaid: updatedInst.lateFeePaid || 0,
+  //           paidDate:
+  //             updatedInst.status === "Paid" ? new Date(refDate) : undefined,
+  //         },
+  //       });
+  //     }
 
-      // 2. Create the Payment record
-      const payment = await tx.payment.create({
-        data: {
-          loanId: loan.id,
-          customerName: loan.customer.fullName,
-          amount,
-          paymentDate: new Date(refDate),
-          paymentMethod: dto.paymentMethod,
-          referenceNumber: dto.referenceNumber,
-          receivedById: dto.receivedBy,
-          notes: dto.notes,
-          allocatedPrincipal: alloc.principalAllocated,
-          allocatedInterest: alloc.interestAllocated,
-          allocatedLateFee: alloc.lateFeeAllocated,
-          installmentNumbersCovered: alloc.coveredInstallmentNumbers,
-        },
-        select: { id: true },
-      });
-      createdPaymentId = payment.id;
+  //     // 2. Create the Payment record
+  //     const payment = await tx.payment.create({
+  //       data: {
+  //         loanId: loan.id,
+  //         customerName: loan.customer.fullName,
+  //         amount,
+  //         paymentDate: new Date(refDate),
+  //         paymentMethod: dto.paymentMethod,
+  //         referenceNumber: dto.referenceNumber,
+  //         receivedById: dto.receivedBy,
+  //         notes: dto.notes,
+  //         allocatedPrincipal: alloc.principalAllocated,
+  //         allocatedInterest: alloc.interestAllocated,
+  //         allocatedLateFee: alloc.lateFeeAllocated,
+  //         installmentNumbersCovered: alloc.coveredInstallmentNumbers,
+  //       },
+  //       select: { id: true },
+  //     });
+  //     createdPaymentId = payment.id;
 
-      // 3. Update the loan totals + status
-      await tx.loan.update({
-        where: { id: loan.id },
-        data: {
-          totalPaidAmount: newTotalPaid,
-          outstandingBalance: newOutstanding,
-          status: nextStatus,
-          ...(isFullySettled && { settledDate: new Date(refDate) }),
-          // recompute next due date from updated installments
-          nextDueDate: (() => {
-            const next = installmentsForAlloc
-              .filter((i) => i.status !== "Paid" && i.remainingAmount > 0)
-              .sort(
-                (a, b) =>
-                  new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime(),
-              )[0];
-            return next ? new Date(next.dueDate) : null;
-          })(),
-          nextDueAmount: (() => {
-            const next = installmentsForAlloc
-              .filter((i) => i.status !== "Paid" && i.remainingAmount > 0)
-              .sort(
-                (a, b) =>
-                  new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime(),
-              )[0];
-            return next ? next.remainingAmount : null;
-          })(),
-        },
-      });
+  //     // 3. Update the loan totals + status
+  //     await tx.loan.update({
+  //       where: { id: loan.id },
+  //       data: {
+  //         totalPaidAmount: newTotalPaid,
+  //         outstandingBalance: newOutstanding,
+  //         status: nextStatus,
+  //         ...(isFullySettled && { settledDate: new Date(refDate) }),
+  //         // recompute next due date from updated installments
+  //         nextDueDate: (() => {
+  //           const next = installmentsForAlloc
+  //             .filter((i) => i.status !== "Paid" && i.remainingAmount > 0)
+  //             .sort(
+  //               (a, b) =>
+  //                 new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime(),
+  //             )[0];
+  //           return next ? new Date(next.dueDate) : null;
+  //         })(),
+  //         nextDueAmount: (() => {
+  //           const next = installmentsForAlloc
+  //             .filter((i) => i.status !== "Paid" && i.remainingAmount > 0)
+  //             .sort(
+  //               (a, b) =>
+  //                 new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime(),
+  //             )[0];
+  //           return next ? next.remainingAmount : null;
+  //         })(),
+  //       },
+  //     });
 
-      // 4. Sync the linked LoanAccount
-      if (loan.accountId) {
-        await tx.loanAccount.update({
-          where: { id: loan.accountId },
-          data: {
-            totalCollected: { increment: amount },
-            remainingBalance: Math.max(0, newOutstanding),
-          },
-        });
-      }
-    });
+  //     // 4. Sync the linked LoanAccount
+  //     if (loan.accountId) {
+  //       await tx.loanAccount.update({
+  //         where: { id: loan.accountId },
+  //         data: {
+  //           totalCollected: { increment: amount },
+  //           remainingBalance: Math.max(0, newOutstanding),
+  //         },
+  //       });
+  //     }
+  //   });
 
-    // ---------- SMS alert (outside the tx — best-effort) ----------
-    const freshPayment = await this.prisma.payment.findUnique({
-      where: { id: createdPaymentId },
-      include: {
-        receivedBy: true,
-        loan: { include: { customer: true } },
-      },
-    });
+  //   // ---------- SMS alert (outside the tx — best-effort) ----------
+  //   const freshPayment = await this.prisma.payment.findUnique({
+  //     where: { id: createdPaymentId },
+  //     include: {
+  //       receivedBy: true,
+  //       loan: { include: { customer: true } },
+  //     },
+  //   });
 
-    let smsResult: { status?: string; recipient?: string; message?: string } =
-      {};
+  //   let smsResult: { status?: string; recipient?: string; message?: string } =
+  //     {};
 
-    if (freshPayment) {
-      try {
-        smsResult = isFullySettled
-          ? await this.smsSettlementAlert(loan, freshPayment, "final")
-          : await this.smsPaymentAlert(loan, freshPayment);
-      } catch (err) {
-        // swallow — SMS failure should not break the payment response
-        console.error("SMS send failed:", err);
-      }
-    }
+  //   if (freshPayment) {
+  //     try {
+  //       smsResult = isFullySettled
+  //         ? await this.smsSettlementAlert(loan, freshPayment, "final")
+  //         : await this.smsPaymentAlert(loan, freshPayment);
+  //     } catch (err) {
+  //       // swallow — SMS failure should not break the payment response
+  //       console.error("SMS send failed:", err);
+  //     }
+  //   }
 
-    await this.eventBus.publish({
-      type: "payment.recorded",
-      payload: { loanId: id, paymentId: createdPaymentId, amount },
-    });
-    await this.eventBus.publish({
-      type: "loans.changed",
-      payload: { action: "payment", loanId: id },
-    });
-    await this.eventBus.publish({
-      type: "stats.changed",
-      payload: {},
-    });
+  //   await this.eventBus.publish({
+  //     type: "payment.recorded",
+  //     payload: { loanId: id, paymentId: createdPaymentId, amount },
+  //   });
+  //   await this.eventBus.publish({
+  //     type: "loans.changed",
+  //     payload: { action: "payment", loanId: id },
+  //   });
+  //   await this.eventBus.publish({
+  //     type: "stats.changed",
+  //     payload: {},
+  //   });
 
-    return this.formatPaymentResponse(freshPayment, alloc, smsResult);
-  }
+  //   return this.formatPaymentResponse(freshPayment, alloc, smsResult);
+  // }
 
   // async earlySettle(id: string, dto: ExecuteSettlementDto): Promise<any> {
   //   const loan = await this.prisma.loan.findUnique({
@@ -1773,6 +1774,477 @@ export class LoansService {
   // Document uploads
   // ---------------------------------------------------------------------------
 
+  async receivePayment(id: string, dto: RecordPaymentDto): Promise<any> {
+    const loan = await this.prisma.loan.findUnique({
+      where: { id },
+      include: {
+        customer: true,
+        account: true,
+        installments: { orderBy: { installmentNumber: "asc" } },
+        payments: { orderBy: { createdAt: "desc" } },
+      },
+    });
+
+    if (!loan) throw new NotFoundException("Loan not found");
+
+    const payableStatuses = ["Active", "Overdue"];
+    if (!payableStatuses.includes(loan.status)) {
+      throw new BadRequestException(
+        "Payments are only accepted on Active or Overdue loans",
+      );
+    }
+
+    const refDate = dto.paymentDate ? dto.paymentDate.slice(0, 10) : todayISO();
+    const amount = roundTo(dto.amount);
+
+    if (amount <= 0) {
+      throw new BadRequestException("Payment amount must be greater than zero");
+    }
+
+    // -------------------------------------------------------------------------
+    // 1. Apply payment to the loan-level penalty FIRST
+    // -------------------------------------------------------------------------
+    const penaltyBefore = roundTo(Number(loan.penaltyAmount ?? 0));
+    const penaltyPaid = roundTo(Math.min(amount, penaltyBefore));
+    const penaltyAfter = roundTo(Math.max(0, penaltyBefore - penaltyPaid));
+
+    // The remaining amount after covering penalty goes through the normal
+    // waterfall (late fee → interest → principal).
+    const amountForInstallments = roundTo(amount - penaltyPaid);
+
+    // -------------------------------------------------------------------------
+    // 2. Build installment view — unchanged, but use amountForInstallments
+    //    in the allocator below.
+    // -------------------------------------------------------------------------
+    const installmentsForAlloc = loan.installments.map((inst) => ({
+      installmentNumber: inst.installmentNumber,
+      dueDate: inst.dueDate.toISOString().slice(0, 10),
+      principalAmount: Number(inst.principalAmount),
+      interestAmount: Number(inst.interestAmount),
+      totalInstallment: Number(inst.totalInstallment),
+      paidAmount: Number(inst.paidAmount),
+      remainingAmount: Number(inst.remainingAmount),
+      status: inst.status,
+      lateFee: Number(inst.lateFee),
+      paidPrincipal: Number(inst.paidPrincipal) || 0,
+      paidInterest: Number(inst.paidInterest) || 0,
+      lateFeePaid: Number(inst.lateFeePaid) || 0,
+    }));
+
+    const loanLike = {
+      id: loan.id,
+      accountNumber: loan.accountNumber,
+      customerName: loan.customer.fullName,
+      customerPhone: loan.customer.phone,
+      customerEmail: loan.customer.email || "",
+      loanType: loan.loanType,
+      requestedAmount: Number(loan.requestedAmount),
+      disbursedAmount: Number(loan.disbursedAmount),
+      interestRatePerAnnum: Number(loan.interestRatePerAnnum),
+      termMonths: loan.termMonths,
+      repaymentFrequency: loan.repaymentFrequency,
+      interestMethod: loan.interestMethod,
+      processingFee: Number(loan.processingFee),
+      earlySettlementPenaltyPercent: Number(loan.earlySettlementPenaltyPercent),
+      status: loan.status,
+      requestedDate: loan.requestedDate.toISOString(),
+      installments: installmentsForAlloc,
+      payments: loan.payments || [],
+      totalPaidAmount: Number(loan.totalPaidAmount),
+      outstandingBalance: Number(loan.outstandingBalance),
+      purpose: loan.purpose || "",
+      creditScore: 0,
+      kyc: null as any,
+    };
+
+    // Allocate only what's left AFTER penalty has been covered
+    const alloc = allocatePayment(loanLike, amountForInstallments, refDate);
+
+    // -------------------------------------------------------------------------
+    // 3. Totals — penalty does not reduce outstandingBalance
+    //    (it's a fee, not part of the contractual outstanding)
+    // -------------------------------------------------------------------------
+    const newTotalPaid = roundTo(Number(loan.totalPaidAmount) + amount);
+    const newOutstanding = roundTo(
+      Math.max(0, Number(loan.outstandingBalance) - amountForInstallments),
+    );
+    const isFullySettled = newOutstanding <= 0 && penaltyAfter <= 0;
+
+    // Any overdue installments after allocation?
+    const hasRemainingOverdue = installmentsForAlloc.some(
+      (inst) =>
+        inst.status !== "Paid" &&
+        inst.remainingAmount > 0 &&
+        new Date(inst.dueDate).getTime() < new Date(refDate).getTime(),
+    );
+
+    let nextStatus: string;
+    if (isFullySettled) {
+      nextStatus = "Settled";
+    } else if (hasRemainingOverdue || penaltyAfter > 0) {
+      nextStatus = "Overdue";
+    } else {
+      nextStatus = loan.status === "Overdue" ? "Active" : loan.status;
+    }
+
+    // ---------- Run everything in a transaction ----------
+    let createdPaymentId = "";
+
+    await this.prisma.$transaction(async (tx) => {
+      // 1. Update each affected installment
+      for (const inst of loan.installments) {
+        const updatedInst = installmentsForAlloc.find(
+          (i) => i.installmentNumber === inst.installmentNumber,
+        );
+        if (!updatedInst) continue;
+
+        const changed =
+          updatedInst.paidAmount !== Number(inst.paidAmount) ||
+          updatedInst.remainingAmount !== Number(inst.remainingAmount) ||
+          updatedInst.status !== inst.status ||
+          updatedInst.paidPrincipal !== (Number(inst.paidPrincipal) || 0) ||
+          updatedInst.paidInterest !== (Number(inst.paidInterest) || 0) ||
+          updatedInst.lateFeePaid !== (Number(inst.lateFeePaid) || 0);
+
+        if (!changed) continue;
+
+        await tx.installment.update({
+          where: { id: inst.id },
+          data: {
+            paidAmount: updatedInst.paidAmount,
+            remainingAmount: updatedInst.remainingAmount,
+            status: updatedInst.status,
+            paidPrincipal: updatedInst.paidPrincipal || 0,
+            paidInterest: updatedInst.paidInterest || 0,
+            lateFeePaid: updatedInst.lateFeePaid || 0,
+            paidDate:
+              updatedInst.status === "Paid" ? new Date(refDate) : undefined,
+          },
+        });
+      }
+
+      // 2. Create the Payment record
+      const payment = await tx.payment.create({
+        data: {
+          loanId: loan.id,
+          customerName: loan.customer.fullName,
+          amount,
+          paymentDate: new Date(refDate),
+          paymentMethod: dto.paymentMethod,
+          referenceNumber: dto.referenceNumber,
+          receivedById: dto.receivedBy,
+          notes: dto.notes,
+          allocatedPrincipal: alloc.principalAllocated,
+          allocatedInterest: alloc.interestAllocated,
+          allocatedLateFee: roundTo(alloc.lateFeeAllocated + penaltyPaid),
+          installmentNumbersCovered: alloc.coveredInstallmentNumbers,
+        },
+        select: { id: true },
+      });
+      createdPaymentId = payment.id;
+
+      // 3. Record penalty payment history (only when something was actually paid)
+      if (penaltyPaid > 0) {
+        await tx.penaltyPayment.create({
+          data: {
+            loanId: loan.id,
+            paymentId: payment.id,
+            paidDate: new Date(refDate),
+            paidAmount: penaltyPaid,
+            remainingAmount: penaltyAfter,
+            penaltySnapshot: penaltyBefore,
+            createdById: dto.receivedBy,
+          },
+        });
+      }
+
+      // 4. Update the loan totals + status + penalty balance
+      await tx.loan.update({
+        where: { id: loan.id },
+        data: {
+          totalPaidAmount: newTotalPaid,
+          outstandingBalance: newOutstanding,
+          status: nextStatus,
+          penaltyAmount: penaltyAfter,
+          ...(isFullySettled && { settledDate: new Date(refDate) }),
+          nextDueDate: (() => {
+            const next = installmentsForAlloc
+              .filter((i) => i.status !== "Paid" && i.remainingAmount > 0)
+              .sort(
+                (a, b) =>
+                  new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime(),
+              )[0];
+            return next ? new Date(next.dueDate) : null;
+          })(),
+          nextDueAmount: (() => {
+            const next = installmentsForAlloc
+              .filter((i) => i.status !== "Paid" && i.remainingAmount > 0)
+              .sort(
+                (a, b) =>
+                  new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime(),
+              )[0];
+            return next ? next.remainingAmount : null;
+          })(),
+        },
+      });
+
+      // 5. Sync the linked LoanAccount
+      if (loan.accountId) {
+        await tx.loanAccount.update({
+          where: { id: loan.accountId },
+          data: {
+            totalCollected: { increment: amount },
+            remainingBalance:
+              newTotalPaid >= Number(loan.outstandingBalance)
+                ? 0
+                : newOutstanding,
+          },
+        });
+      }
+    });
+
+    // ---------- SMS alert (unchanged) ----------
+    const freshPayment = await this.prisma.payment.findUnique({
+      where: { id: createdPaymentId },
+      include: {
+        receivedBy: true,
+        loan: { include: { customer: true } },
+      },
+    });
+
+    let smsResult: { status?: string; recipient?: string; message?: string } =
+      {};
+
+    if (freshPayment) {
+      try {
+        smsResult = isFullySettled
+          ? await this.smsSettlementAlert(loan, freshPayment, "final")
+          : await this.smsPaymentAlert(loan, freshPayment);
+      } catch (err) {
+        console.error("SMS send failed:", err);
+      }
+    }
+
+    await this.eventBus.publish({
+      type: "payment.recorded",
+      payload: {
+        loanId: id,
+        paymentId: createdPaymentId,
+        amount,
+        penaltyPaid,
+        penaltyRemaining: penaltyAfter,
+      },
+    });
+    await this.eventBus.publish({
+      type: "loans.changed",
+      payload: { action: "payment", loanId: id },
+    });
+    await this.eventBus.publish({
+      type: "stats.changed",
+      payload: {},
+    });
+
+    return this.formatPaymentResponse(
+      freshPayment,
+      {
+        ...alloc,
+        // Include the penalty portion so the receipt can show it
+        lateFeeAllocated: roundTo(alloc.lateFeeAllocated + penaltyPaid),
+      },
+      smsResult,
+    );
+  }
+
+  // async earlySettle(id: string, dto: ExecuteSettlementDto): Promise<any> {
+  //   const loan = await this.prisma.loan.findUnique({
+  //     where: { id },
+  //     include: {
+  //       customer: true,
+  //       account: true,
+  //       installments: { orderBy: { installmentNumber: "asc" } },
+  //       payments: {
+  //         orderBy: { createdAt: "desc" },
+  //         include: { receivedBy: true },
+  //       },
+  //     },
+  //   });
+
+  //   if (!loan) throw new NotFoundException("Loan not found");
+
+  //   const closedStatuses = ["Settled", "Early_Settled", "Rejected"];
+  //   if (closedStatuses.includes(loan.status)) {
+  //     throw new BadRequestException("Loan is already closed");
+  //   }
+  //   if (!loan.disbursedAmount || Number(loan.disbursedAmount) <= 0) {
+  //     throw new BadRequestException(
+  //       "Loan must be disbursed before early settlement",
+  //     );
+  //   }
+
+  //   const refDate = dto.settlementDate
+  //     ? dto.settlementDate.slice(0, 10)
+  //     : todayISO();
+
+  //   const installmentsForCalc = loan.installments.map((inst) => ({
+  //     installmentNumber: inst.installmentNumber,
+  //     dueDate: inst.dueDate.toISOString().slice(0, 10),
+  //     principalAmount: Number(inst.principalAmount),
+  //     interestAmount: Number(inst.interestAmount),
+  //     totalInstallment: Number(inst.totalInstallment),
+  //     paidAmount: Number(inst.paidAmount),
+  //     remainingAmount: Number(inst.remainingAmount),
+  //     status: inst.status as InstallmentStatus,
+  //     lateFee: Number(inst.lateFee),
+  //     paidPrincipal: Number(inst.paidPrincipal) || 0,
+  //     paidInterest: Number(inst.paidInterest) || 0,
+  //     lateFeePaid: Number(inst.lateFeePaid) || 0,
+  //   }));
+
+  //   const loanLike: Loan = {
+  //     id: loan.id,
+  //     accountNumber: loan.accountNumber,
+  //     customerName: loan.customer.fullName,
+  //     customerPhone: loan.customer.phone,
+  //     customerEmail: loan.customer.email || "",
+  //     loanType: loan.loanType as LoanType,
+  //     requestedAmount: Number(loan.requestedAmount),
+  //     disbursedAmount: Number(loan.disbursedAmount),
+  //     interestRatePerAnnum: Number(loan.interestRatePerAnnum),
+  //     termMonths: loan.termMonths,
+  //     repaymentFrequency: loan.repaymentFrequency as RepaymentFrequency,
+  //     interestMethod: loan.interestMethod as InterestMethod,
+  //     processingFee: Number(loan.processingFee),
+  //     earlySettlementPenaltyPercent: Number(loan.earlySettlementPenaltyPercent),
+  //     status: loan.status as Loan["status"],
+  //     requestedDate: loan.requestedDate.toISOString(),
+  //     installments: installmentsForCalc,
+  //     payments: loan.payments.map((p) => this.toPaymentRecord(p)),
+  //     totalPaidAmount: Number(loan.totalPaidAmount),
+  //     outstandingBalance: Number(loan.outstandingBalance),
+  //     purpose: loan.purpose || "",
+  //     creditScore: 0,
+  //     kyc: null as any,
+  //   };
+
+  //   // ---- Compute authoritative quote + apply manual reduction ----
+  //   const quote = calculateEarlySettlementQuote(loanLike, refDate);
+  //   const basePayoff = roundTo(quote.totalSettlementAmount);
+  //   const reduction = roundTo(
+  //     Math.min(Math.max(Number(dto.reductionAmount ?? 0), 0), basePayoff),
+  //   );
+  //   const settlementAmount = roundTo(basePayoff - reduction);
+
+  //   const coveredInstallmentNumbers = installmentsForCalc
+  //     .filter((i) => i.status !== "Paid" || i.remainingAmount > 0)
+  //     .map((i) => i.installmentNumber);
+
+  //   const receivedById = dto.receivedBy || null;
+
+  //   let createdPaymentId = "";
+
+  //   await this.prisma.$transaction(async (tx) => {
+  //     // 1. Mark all installments as paid
+  //     for (const inst of loan.installments) {
+  //       if (inst.status === "Paid" && Number(inst.remainingAmount) <= 0) {
+  //         continue;
+  //       }
+
+  //       await tx.installment.update({
+  //         where: { id: inst.id },
+  //         data: {
+  //           paidAmount: Number(inst.totalInstallment),
+  //           remainingAmount: 0,
+  //           status: "Paid",
+  //           paidPrincipal: Number(inst.principalAmount),
+  //           paidInterest: Number(inst.interestAmount),
+  //           paidDate: new Date(refDate),
+  //         },
+  //       });
+  //     }
+
+  //     // 2. Create the settlement Payment record
+  //     const payment = await tx.payment.create({
+  //       data: {
+  //         loanId: loan.id,
+  //         customerName: loan.customer.fullName,
+  //         amount: settlementAmount,
+  //         paymentDate: new Date(refDate),
+  //         paymentMethod: dto.paymentMethod,
+  //         referenceNumber: dto.referenceNumber,
+  //         receivedById,
+  //         notes:
+  //           dto.notes ||
+  //           (reduction > 0
+  //             ? `Early settlement payoff (reduction LKR ${reduction.toLocaleString()})`
+  //             : "Early settlement payoff"),
+  //         allocatedPrincipal: quote.outstandingPrincipalBalance,
+  //         allocatedInterest: quote.accruedInterestToDate,
+  //         allocatedLateFee: quote.earlySettlementPenaltyFee,
+  //         installmentNumbersCovered: coveredInstallmentNumbers,
+  //       },
+  //       select: { id: true },
+  //     });
+  //     createdPaymentId = payment.id;
+
+  //     // 3. Update the loan
+  //     await tx.loan.update({
+  //       where: { id: loan.id },
+  //       data: {
+  //         status: "Early_Settled",
+  //         settledDate: new Date(refDate),
+  //         totalPaidAmount: { increment: settlementAmount },
+  //         outstandingBalance: 0,
+  //         nextDueDate: null,
+  //         nextDueAmount: null,
+  //         earlySettlementQuote: {
+  //           ...quote,
+  //           basePayoff,
+  //           manualReduction: reduction,
+  //           finalPayoff: settlementAmount,
+  //         } as any,
+  //       },
+  //     });
+
+  //     // 4. Sync the linked account
+  //     if (loan.accountId) {
+  //       await tx.loanAccount.update({
+  //         where: { id: loan.accountId },
+  //         data: {
+  //           totalCollected: { increment: settlementAmount },
+  //           remainingBalance: 0,
+  //         },
+  //       });
+  //     }
+  //   });
+
+  //   // ---------- SMS alert ----------
+  //   const freshPayment = await this.prisma.payment.findUnique({
+  //     where: { id: createdPaymentId },
+  //     include: {
+  //       receivedBy: true,
+  //       loan: { include: { customer: true } },
+  //     },
+  //   });
+
+  //   if (freshPayment) {
+  //     try {
+  //       await this.smsSettlementAlert(loan, freshPayment, "early");
+  //     } catch (err) {
+  //       console.error("SMS send failed:", err);
+  //     }
+  //   }
+
+  //   await this.eventBus.publish({
+  //     type: "loans.changed",
+  //     payload: { action: "settled", loanId: id },
+  //   });
+  //   await this.eventBus.publish({
+  //     type: "stats.changed",
+  //     payload: {},
+  //   });
+
+  //   return this.getOne(loan.id);
+  // }
   async earlySettle(id: string, dto: ExecuteSettlementDto): Promise<any> {
     const loan = await this.prisma.loan.findUnique({
       where: { id },
@@ -1844,13 +2316,35 @@ export class LoansService {
       kyc: null as any,
     };
 
-    // ---- Compute authoritative quote + apply manual reduction ----
+    // ---- Compute authoritative quote ----
     const quote = calculateEarlySettlementQuote(loanLike, refDate);
-    const basePayoff = roundTo(quote.totalSettlementAmount);
+
+    // ⬇ PENALTY: add outstanding penalty on top of the base payoff
+    const outstandingPenalty = roundTo(
+      Math.max(0, Number(loan.penaltyAmount ?? 0)),
+    );
+
+    const basePayoff = roundTo(
+      quote.totalSettlementAmount + outstandingPenalty,
+    );
+
     const reduction = roundTo(
       Math.min(Math.max(Number(dto.reductionAmount ?? 0), 0), basePayoff),
     );
+
     const settlementAmount = roundTo(basePayoff - reduction);
+
+    // ⬇ PENALTY: how much of this payment closes the penalty ledger
+    // Reduction should never eat into the penalty first — apply reduction
+    // against P+I + penalty proportionally would be complex. Simpler rule:
+    // the penalty is covered last, so if reduction >= outstandingPenalty
+    // the penalty is fully waived; otherwise part of it is paid.
+    //
+    // For accounting simplicity we treat the full outstandingPenalty as
+    // "paid via the settlement" (fully cleared) — the reduction just lowers
+    // the cash collected.
+    const penaltyPaid = outstandingPenalty;
+    const penaltyAfter = 0;
 
     const coveredInstallmentNumbers = installmentsForCalc
       .filter((i) => i.status !== "Paid" || i.remainingAmount > 0)
@@ -1897,14 +2391,32 @@ export class LoansService {
               : "Early settlement payoff"),
           allocatedPrincipal: quote.outstandingPrincipalBalance,
           allocatedInterest: quote.accruedInterestToDate,
-          allocatedLateFee: quote.earlySettlementPenaltyFee,
+          // ⬇ PENALTY: add penalty to the late-fee bucket so reports total correctly
+          allocatedLateFee: roundTo(
+            quote.earlySettlementPenaltyFee + outstandingPenalty,
+          ),
           installmentNumbersCovered: coveredInstallmentNumbers,
         },
         select: { id: true },
       });
       createdPaymentId = payment.id;
 
-      // 3. Update the loan
+      // 3. ⬇ PENALTY: log the penalty payment history row
+      if (penaltyPaid > 0) {
+        await tx.penaltyPayment.create({
+          data: {
+            loanId: loan.id,
+            paymentId: payment.id,
+            paidDate: new Date(refDate),
+            paidAmount: penaltyPaid,
+            remainingAmount: penaltyAfter,
+            penaltySnapshot: outstandingPenalty,
+            createdById: receivedById,
+          },
+        });
+      }
+
+      // 4. Update the loan
       await tx.loan.update({
         where: { id: loan.id },
         data: {
@@ -1912,6 +2424,9 @@ export class LoansService {
           settledDate: new Date(refDate),
           totalPaidAmount: { increment: settlementAmount },
           outstandingBalance: 0,
+          // ⬇ PENALTY: clear the penalty ledger on the loan
+          penaltyAmount: 0,
+          penaltyLastAccrued: new Date(refDate),
           nextDueDate: null,
           nextDueAmount: null,
           earlySettlementQuote: {
@@ -1919,11 +2434,13 @@ export class LoansService {
             basePayoff,
             manualReduction: reduction,
             finalPayoff: settlementAmount,
+            outstandingPenalty,
+            penaltyPaid,
           } as any,
         },
       });
 
-      // 4. Sync the linked account
+      // 5. Sync the linked account
       if (loan.accountId) {
         await tx.loanAccount.update({
           where: { id: loan.accountId },
@@ -2173,11 +2690,18 @@ export class LoansService {
       // Totals
       totalPaidAmount: Number(loan.totalPaidAmount),
       totalInterest: Number(loan.account?.interestAmount ?? loan.totalInterest),
-      outstandingBalance: Number(loan.account?.remainingBalance ?? loan.outstandingBalance),
+      outstandingBalance: Number(
+        loan.account?.remainingBalance ?? loan.outstandingBalance,
+      ),
 
       // Next Due
       nextDueDate,
       nextDueAmount,
+
+      // penalty
+      penaltyAmount: Number(loan.penaltyAmount) || 0,
+      penaltyLastAccrued: loan.penaltyLastAccrued,
+      penaltyPayments: loan.penaltyPayments || [],
 
       // Other
       purpose: loan.purpose || "",

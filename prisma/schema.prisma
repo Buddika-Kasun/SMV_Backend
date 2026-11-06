@@ -106,6 +106,8 @@ model Loan {
   earlySettlementPenaltyPercent Decimal           @default(2.5) @map("early_settlement_penalty_percent") @db.Decimal(5,2)
   purpose                    String?
   status                     String              // Values: 'Pending Approval', 'KYC Pending', etc.
+  penaltyAmount              Float?   @default(0)   
+  penaltyLastAccrued         DateTime?
   requestedDate              DateTime            @default(now()) @map("requested_date")
   approvedDate               DateTime?           @map("approved_date")
   disbursedDate              DateTime?           @map("disbursed_date")
@@ -138,8 +140,27 @@ model Loan {
   payments                   Payment[]
   documents                  LoanDocument[]
   smsLogs                    SMSLog[]
+  penaltyPayments            PenaltyPayment[]
 
   @@map("loans")
+}
+
+model PenaltyPayment {
+  id              String   @id @default(uuid())
+  loanId          String
+  loan            Loan     @relation(fields: [loanId], references: [id], onDelete: Cascade)
+
+  paymentId       String?              // link back to the Payment row that covered it
+  paidDate        DateTime             // the date the penalty was paid
+  paidAmount      Float                // how much of the penalty this payment covered
+  remainingAmount Float                // loan.penaltyAmount after this payment
+  penaltySnapshot Float                // the loan.penaltyAmount BEFORE this payment (for audit)
+
+  createdAt       DateTime @default(now())
+  createdById     String?              // receivedBy user
+
+  @@index([loanId, paidDate])
+  @@map("penalty_payments")
 }
 
 model Installment {
